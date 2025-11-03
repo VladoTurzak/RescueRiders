@@ -1,9 +1,10 @@
-// Rescue Riders — Universal Build (Desktop + Mobile) with Jetski-Handle Joystick
-// FIXES:
-// 1) jetski_loop hrá iba pri pohybe (auto start/stop podľa rýchlosti)
-// 2) Intro / Reward / Fail obrazovky sú fullscreen bez deformácie (contain fit)
+// Rescue Riders — Universal Mobile/Desktop (Improved Mobile Controls & Performance)
+// Fixes: precise joystick (deadzone + smoothing), capped spawns on mobile, constant-speed movement, engine sfx only on move,
+// fullscreen intro/reward/fail "contain", high-performance renderer, capped resolution for mobile perf.
+
 const GAME_WIDTH = 900, GAME_HEIGHT = 600;
 const MainScene = { key: 'main', preload, create, update, init };
+
 const config = {
   type: Phaser.AUTO,
   parent: 'game-container',
@@ -12,9 +13,13 @@ const config = {
   backgroundColor: 0x87CEEB,
   physics: { default: 'arcade', arcade: { debug: false } },
   scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
+  // 🔧 render/perf
+  render: { powerPreference: 'high-performance', antialias: true, roundPixels: true, transparent: false },
+  resolution: 1, // cap DPR to 1 on mobile for performance
   fps: { target: 60, forceSetTimeOut: true },
   scene: [MainScene]
 };
+
 let game = new Phaser.Game(config);
 game.scene.start('main', { isIntro: true });
 
@@ -33,11 +38,11 @@ function placeFullscreenImage(key, depth = 0) {
   const tex = this.textures.get(key).getSourceImage();
   const iw = tex.width, ih = tex.height;
   const scale = Math.min(config.width / iw, config.height / ih);
-  const img = this.add.image(config.width / 2, config.height / 2, key)
+  return this.add.image(config.width / 2, config.height / 2, key)
     .setOrigin(0.5).setDepth(depth).setScale(scale);
-  return img;
 }
 
+// Missions
 const MISSIONS = [
   { rescued: 10, caught: 3,  time: 60, swimmerDelay: 1500, crookDelay: 7000 },
   { rescued: 12, caught: 5,  time: 55, swimmerDelay: 1400, crookDelay: 6000 },
@@ -50,14 +55,25 @@ function init(data) {
   this.currentMission = data?.currentMission ?? 0;
   this.isIntro = data?.isIntro ?? false;
   this.isTouch = this.sys.game.device.input.touch;
+
+  // 🔧 Mobile perf profile
+  this.isMobilePerf = this.isTouch;
+  this.MOBILE_SPAWN_SCALE = this.isMobilePerf ? 1.35 : 1.0;   // redšie spawny na mobile
+  this.MAX_SWIMMERS = this.isMobilePerf ? 6 : 10;
+  this.MAX_CROOKS   = this.isMobilePerf ? 3 : 6;
+
+  // pohyb
+  this.BASE_SPEED = 260;              // px/s
+  this.MOBILE_SPEED = this.isMobilePerf ? 240 : this.BASE_SPEED;
 }
 
 function preload() {
   this.load.image('hero', 'assets/hero_screen.png');
-  ['jetski_m','jetski_m_left','jetski_m_up','jetski_m_down','jetski_f','jetski_f_left','jetski_f_up','jetski_f_down']
-    .forEach(j => this.load.image(j, `assets/${j}.png`));
+  ['jetski_m','jetski_m_left','jetski_m_up','jetski_m_down',
+   'jetski_f','jetski_f_left','jetski_f_up','jetski_f_down']
+   .forEach(j => this.load.image(j, `assets/${j}.png`));
   ['swimmer_m','swimmer_f','crook','crook_left','splash']
-    .forEach(a => this.load.image(a, `assets/${a}.png`));
+   .forEach(a => this.load.image(a, `assets/${a}.png`));
   this.load.image('shark', 'assets/shark.png');
   this.load.image('shark_right', 'assets/shark_right.png');
   for (let i=1;i<=5;i++) this.load.image(`bg${i}`, `assets/bg${i}.png`);
@@ -88,7 +104,7 @@ function create() {
     right:Phaser.Input.Keyboard.KeyCodes.RIGHT
   });
 
-  // --- INTRO (fullscreen image, no distortion) ---
+  // --- INTRO ---
   if (this.isIntro) {
     placeFullscreenImage.call(this, 'hero', -10);
     const isMobile = this.isTouch;
@@ -98,8 +114,7 @@ function create() {
     this.tweens.add({targets:press,alpha:0.2,yoyo:true,repeat:-1,duration:800});
 
     this.sound.stopAll();
-    const intro = this.sound.add('intro_theme', { loop:true, volume:0.7 });
-    intro.play();
+    this.sound.add('intro_theme', { loop:true, volume:0.7 }).play();
 
     const startGame=()=>this.scene.restart({currentMission:0,isIntro:false});
     this.input.keyboard.once('keydown-SPACE',startGame);
@@ -110,10 +125,10 @@ function create() {
 
   // --- MISSION MUSIC ---
   this.sound.stopAll();
-  this.sound.add('mission_theme', { loop:true, volume:0.4 }).play();
+  this.sound.add('mission_theme', { loop:true, volume:0.45 }).play();
 
-  // Engine SFX – vytvor, ale nespúšťaj hneď
-  this.engineSfx = this.sound.add('jetski_loop', { loop:true, volume:1.8 });
+  // engine sfx pripravený, nehrá
+  this.engineSfx = this.sound.add('jetski_loop', { loop:true, volume:2 });
 
   const mission=MISSIONS[this.currentMission];
   const bgKey=`bg${this.currentMission+1}`;
@@ -129,13 +144,15 @@ function create() {
     startTexture
   ).setCollideWorldBounds(false).setSize(100,100);
 
-  this.cursors=this.input.keyboard.createCursorKeys();
-
-  // groups & spawns
+  // groups
   this.swimmers=this.physics.add.group();
   this.crooks=this.physics.add.group();
-  this.time.addEvent({delay:mission.swimmerDelay,callback:spawnSwimmer,callbackScope:this,loop:true});
-  this.time.addEvent({delay:mission.crookDelay,callback:spawnCrook,callbackScope:this,loop:true});
+
+  // spawns (mobil = redšie)
+  const swimDelay = Math.round(mission.swimmerDelay * this.MOBILE_SPAWN_SCALE);
+  const crookDelay = Math.round(mission.crookDelay * this.MOBILE_SPAWN_SCALE);
+  this.time.addEvent({delay:swimDelay, callback:spawnSwimmer, callbackScope:this, loop:true});
+  this.time.addEvent({delay:crookDelay, callback:spawnCrook, callbackScope:this, loop:true});
 
   // sharks
   if(this.currentMission>=3){
@@ -150,7 +167,7 @@ function create() {
   this.physics.add.overlap(this.player,this.swimmers,rescueSwimmer,null,this);
   this.physics.add.collider(this.player,this.crooks,catchCrook,null,this);
 
-  // info panel
+  // panel
   const panelY=this.offsetY+10;
   const isSmall = Math.min(window.innerWidth, window.innerHeight) < 800;
   const scaleFont = isSmall ? 1.2 : 1.0;
@@ -170,64 +187,68 @@ function create() {
 
   this.score=0;this.rescued=0;this.caught=0;
 
-  // hard reset keys
+  // keys
   const onHardReset = (e) => { if (!e.repeat) hardReset(this); };
   this.keys.r.on('down', onHardReset);
   this.keys.esc.on('down', onHardReset);
 
-  // mobile joystick
+  // controls
+  this.cursors=this.input.keyboard.createCursorKeys();
   if (this.isTouch) createHandlebarJoystick.call(this);
 }
 
 function update(){
   if(!this.player)return;
 
-  // keyboard (desktop)
+  // dt (konzistentný pohyb)
+  const dt = this.game.loop.delta / 1000;
+  const speed = this.isTouch ? this.MOBILE_SPEED : this.BASE_SPEED;
+
+  // keyboard
   if(!this.isTouch){
-    this.player.setVelocity(0);
-    if(this.keys.left.isDown){this.player.setVelocityX(-250);this.player.setTexture(this.isFemale?'jetski_f_left':'jetski_m_left');}
-    else if(this.keys.right.isDown){this.player.setVelocityX(250);this.player.setTexture(this.isFemale?'jetski_f':'jetski_m');}
-    if(this.keys.up.isDown){this.player.setVelocityY(-250);this.player.setTexture(this.isFemale?'jetski_f_up':'jetski_m_up');}
-    else if(this.keys.down.isDown){this.player.setVelocityY(250);this.player.setTexture(this.isFemale?'jetski_f_down':'jetski_m_down');}
+    let vx=0, vy=0;
+    if(this.keys.left.isDown){vx=-speed; this.player.setTexture(this.isFemale?'jetski_f_left':'jetski_m_left');}
+    else if(this.keys.right.isDown){vx= speed; this.player.setTexture(this.isFemale?'jetski_f':'jetski_m');}
+    if(this.keys.up.isDown){vy=-speed; this.player.setTexture(this.isFemale?'jetski_f_up':'jetski_m_up');}
+    else if(this.keys.down.isDown){vy= speed; this.player.setTexture(this.isFemale?'jetski_f_down':'jetski_m_down');}
+    this.player.setVelocity(vx, vy);
   } else {
-    // joystick (mobile)
-    if (this.joyVec) {
-      const speed = 260;
-      this.player.setVelocity(this.joyVec.x * speed, this.joyVec.y * speed);
-      const ax = Math.abs(this.joyVec.x), ay = Math.abs(this.joyVec.y);
+    // joystick (smoothed vector)
+    if (this.joyVecSmoothed) {
+      const jx = this.joyVecSmoothed.x, jy = this.joyVecSmoothed.y;
+      this.player.setVelocity(jx*speed, jy*speed);
+
+      const ax = Math.abs(jx), ay = Math.abs(jy);
       if (ay > ax) {
-        if (this.joyVec.y < -0.2) this.player.setTexture(this.isFemale ? 'jetski_f_up' : 'jetski_m_up');
-        else if (this.joyVec.y > 0.2) this.player.setTexture(this.isFemale ? 'jetski_f_down' : 'jetski_m_down');
-      } else if (ax > 0.2) {
-        if (this.joyVec.x < -0.2) this.player.setTexture(this.isFemale ? 'jetski_f_left' : 'jetski_m_left');
-        else if (this.joyVec.x > 0.2) this.player.setTexture(this.isFemale ? 'jetski_f' : 'jetski_m');
+        if (jy < -0.25) this.player.setTexture(this.isFemale ? 'jetski_f_up' : 'jetski_m_up');
+        else if (jy > 0.25) this.player.setTexture(this.isFemale ? 'jetski_f_down' : 'jetski_m_down');
+      } else if (ax > 0.25) {
+        if (jx < -0.25) this.player.setTexture(this.isFemale ? 'jetski_f_left' : 'jetski_m_left');
+        else if (jx > 0.25) this.player.setTexture(this.isFemale ? 'jetski_f' : 'jetski_m');
       }
     } else {
-      this.player.setVelocity(0);
+      this.player.setVelocity(0,0);
     }
   }
 
   // clamp
-  const halfW=this.player.displayWidth/2,halfH=this.player.displayHeight/2;
+  const halfW=this.player.displayWidth/2, halfH=this.player.displayHeight/2;
   this.player.x=Phaser.Math.Clamp(this.player.x,this.offsetX+halfW,this.offsetX+GAME_WIDTH-halfW);
   this.player.y=Phaser.Math.Clamp(this.player.y,this.offsetY+halfH,this.offsetY+GAME_HEIGHT-halfH);
 
-  // Engine sound start/stop podľa rýchlosti
+  // engine sound by speed
   if (this.engineSfx && this.player.body) {
-    const vx = this.player.body.velocity.x || 0;
-    const vy = this.player.body.velocity.y || 0;
-    const speed = Math.hypot(vx, vy);
-    if (speed > 20) {
-      if (!this.engineSfx.isPlaying) this.engineSfx.play();
-    } else {
-      if (this.engineSfx.isPlaying) this.engineSfx.pause();
-    }
+    const v = this.player.body.velocity;
+    const sp = Math.hypot(v.x||0, v.y||0);
+    if (sp > 20) { if (!this.engineSfx.isPlaying) this.engineSfx.play(); }
+    else { if (this.engineSfx.isPlaying) this.engineSfx.pause(); }
   }
 }
 
 // effects
-function showSplash(x,y){const s=this.add.image(x,y,'splash').setScale(0.7);this.tweens.add({targets:s,alpha:0,duration:500,onComplete:()=>s.destroy()});}
-function popupScore(scene,x,y,text){ const t=scene.add.text(x,y,text,{fontSize:'18px',color:'#ffff66',fontStyle:'bold',stroke:'#000',strokeThickness:3}).setDepth(999); scene.tweens.add({targets:t,y:y-30,alpha:0,duration:700,onComplete:()=>t.destroy()}); }
+function showSplash(x,y){const s=this.add.image(x,y,'splash').setScale(0.7);this.tweens.add({targets:s,alpha:0,duration:420,onComplete:()=>s.destroy()});}
+function popupScore(scene,x,y,text){ const t=scene.add.text(x,y,text,{fontSize:'18px',color:'#ffff66',fontStyle:'bold',stroke:'#000',strokeThickness:3}).setDepth(999);
+  scene.tweens.add({targets:t,y:y-26,alpha:0,duration:600,onComplete:()=>t.destroy()}); }
 
 // logic
 function rescueSwimmer(player,swimmer){
@@ -235,8 +256,7 @@ function rescueSwimmer(player,swimmer){
   this.score+=10;this.rescued++;
   this.scoreLabel.setText(`💯 SCORE ${this.score}`);
   this.sound.play('swimmer_spawn',{volume:0.6});
-  showSplash.call(this,swimmer.x,swimmer.y);
-  popupScore(this,swimmer.x,swimmer.y,'+10');
+  showSplash.call(this,swimmer.x,swimmer.y); popupScore(this,swimmer.x,swimmer.y,'+10');
   checkMission.call(this);
 }
 function catchCrook(player,crook){
@@ -244,11 +264,11 @@ function catchCrook(player,crook){
   this.score+=30;this.caught++;
   this.scoreLabel.setText(`💯 SCORE ${this.score}`);
   this.sound.play('crook_spawn',{volume:0.6});
-  showSplash.call(this,crook.x,crook.y);
-  popupScore(this,crook.x,crook.y,'+30');
+  showSplash.call(this,crook.x,crook.y); popupScore(this,crook.x,crook.y,'+30');
   checkMission.call(this);
 }
 function spawnSwimmer(){
+  if (this.swimmers.countActive(true) >= this.MAX_SWIMMERS) return;
   const x=Phaser.Math.Between(this.offsetX+50,this.offsetX+GAME_WIDTH-50);
   const y=Phaser.Math.Between(this.offsetY+50,this.offsetY+GAME_HEIGHT-50);
   const texture=Math.random()>0.5?'swimmer_m':'swimmer_f';
@@ -256,6 +276,7 @@ function spawnSwimmer(){
   s.setVelocity(Phaser.Math.Between(-60,60),Phaser.Math.Between(-40,40)).setBounce(1,1).setSize(70,70);
 }
 function spawnCrook(){
+  if (this.crooks.countActive(true) >= this.MAX_CROOKS) return;
   const side=Phaser.Math.Between(0,1);
   const y=Phaser.Math.Between(this.offsetY+80,this.offsetY+GAME_HEIGHT-80);
   let texture,x,vx;
@@ -279,14 +300,13 @@ function hitShark(player,shark){
   shark.destroy();
   this.score=Math.max(0,this.score-30);
   this.scoreLabel.setText(`💯 SCORE ${this.score}`);
-  const flash=this.add.rectangle(config.width/2,config.height/2,config.width,config.height,0xff0000,0.3).setDepth(999);
-  this.tweens.add({targets:flash,alpha:0,duration:400,onComplete:()=>flash.destroy()});
-  showSplash.call(this,player.x,player.y);
-  popupScore(this,player.x,player.y,'-30');
+  const flash=this.add.rectangle(config.width/2,config.height/2,config.width,config.height,0xff0000,0.28).setDepth(999);
+  this.tweens.add({targets:flash,alpha:0,duration:340,onComplete:()=>flash.destroy()});
+  showSplash.call(this,player.x,player.y); popupScore(this,player.x,player.y,'-30');
 }
 function checkMission(){
   const mission=MISSIONS[this.currentMission];
-  this.goalLabel.setText(`🎯 Rescue ${mission.rescued} (${this.rescued}/${this.rescued>=mission.rescued?mission.rescued:this.rescued}) + Catch ${mission.caught} (${this.caught}/${this.caught>=mission.caught?mission.caught:this.caught})`);
+  this.goalLabel.setText(`🎯 Rescue ${mission.rescued} (${this.rescued}/${mission.rescued}) + Catch ${mission.caught} (${this.caught}/${mission.caught})`);
   if(this.rescued>=mission.rescued&&this.caught>=mission.caught) missionComplete.call(this);
 }
 function missionComplete(){
@@ -296,11 +316,9 @@ function missionComplete(){
   this.sound.stopAll();
   this.sound.add('reward_theme',{loop:true,volume:0.7}).play();
 
-  // Fullscreen reward image (contain fit)
   const rewardKey = `reward${this.currentMission+1}`;
   placeFullscreenImage.call(this, rewardKey, 999);
 
-  // Save + show Top 20 on final screen
   if(this.currentMission===MISSIONS.length-1){
     const nickname = localStorage.getItem('rr_nickname') || 'Player';
     const scoreEntry = { name: nickname, score: this.score, date: new Date().toISOString() };
@@ -319,32 +337,23 @@ function missionComplete(){
         `${(i+1).toString().padStart(2,'0')}. ${e.name} — ${e.score} pts`,
         { fontSize:'18px', color:'#fff', fontFamily:'Courier New' }).setOrigin(0.5).setDepth(1000);
     });
-  }
-
-  const next=()=>this.scene.restart({currentMission:this.currentMission+1,isIntro:false});
-  if(this.currentMission<MISSIONS.length-1){
-    const t=this.add.text(config.width/2,config.height-60,'Press SPACE / ENTER / TAP for next mission',
-      {fontSize:'26px',color:'#fff',backgroundColor:'#000'}).setOrigin(0.5).setDepth(1000);
-    this.tweens.add({targets:t,alpha:0.2,yoyo:true,repeat:-1,duration:800});
-    this.input.keyboard.once('keydown-SPACE',next);
-    this.input.keyboard.once('keydown-ENTER',next);
-    this.input.once('pointerdown',next);
-  } else {
-    this.sound.stopAll();
-    this.sound.add('game_complete', { loop: true, volume: 0.7 }).play();
-
-    this.add.text(config.width / 2, config.height - 100,
-      "🏆 Game Complete! 🏆", { fontSize: '32px', color: '#ff0' }).setOrigin(0.5).setDepth(1000);
 
     const restartText = this.add.text(config.width / 2, config.height - 60,
       'Press R (or Tap) to restart the game',
       { fontSize: '22px', color: '#fff', backgroundColor: '#000' })
       .setOrigin(0.5).setDepth(1000);
     this.tweens.add({ targets: restartText, alpha: 0.2, yoyo: true, repeat: -1, duration: 800 });
-
     const restartHandler = () => { document.removeEventListener('pointerdown', restartHandler); hardReset(this); };
     document.addEventListener('pointerdown', restartHandler);
     this.keys.r.once('down', restartHandler);
+  } else {
+    const next=()=>this.scene.restart({currentMission:this.currentMission+1,isIntro:false});
+    const t=this.add.text(config.width/2,config.height-60,'Press SPACE / ENTER / TAP for next mission',
+      {fontSize:'26px',color:'#fff',backgroundColor:'#000'}).setOrigin(0.5).setDepth(1000);
+    this.tweens.add({targets:t,alpha:0.2,yoyo:true,repeat:-1,duration:800});
+    this.input.keyboard.once('keydown-SPACE',next);
+    this.input.keyboard.once('keydown-ENTER',next);
+    this.input.once('pointerdown',next);
   }
 }
 function failMission(){
@@ -353,10 +362,7 @@ function failMission(){
   if (this.engineSfx) this.engineSfx.stop();
   this.sound.stopAll();
   this.sound.add('fail_theme',{loop:true,volume:0.7}).play();
-
-  // Fullscreen fail image (contain fit)
   placeFullscreenImage.call(this, 'fail', 999);
-
   const retry=()=>this.scene.restart({currentMission:this.currentMission,isIntro:false});
   const t=this.add.text(config.width/2,config.height-60,'Press SPACE / ENTER / TAP to retry',
     {fontSize:'26px',color:'#fff',backgroundColor:'#000'}).setOrigin(0.5).setDepth(1000);
@@ -366,40 +372,75 @@ function failMission(){
   this.input.once('pointerdown',retry);
 }
 
-// joystick
+// --- Mobile joystick (handlebars): deadzone + smoothing + pointer lock ---
 function createHandlebarJoystick(){
   const pad = Math.min(this.scale.width, this.scale.height) * 0.08;
   const baseX = pad + 180;
   const baseY = this.scale.height - pad - 120;
 
-  const base = this.add.image(baseX, baseY, 'handle_base').setDepth(1001).setAlpha(0.85).setScale(0.9);
-  const knob = this.add.image(baseX, baseY, 'handle_knob').setDepth(1002).setAlpha(0.95).setScale(0.8);
+  const base = this.add.image(baseX, baseY, 'handle_base').setDepth(1001).setAlpha(0.9).setScale(0.9);
+  const knob = this.add.image(baseX, baseY, 'handle_knob').setDepth(1002).setAlpha(0.98).setScale(0.8);
 
-  const radius = 80;
-  this.joyVec = null;
+  const RADIUS = 84;
+  const DEADZONE = 0.18;       // presnejší stred
+  const SMOOTH = 0.22;         // low-pass filter (0..1)
+
+  let activePointerId = null;
+  let rawVec = {x:0,y:0};
+  this.joyVecSmoothed = null;
+
+  const applyDeadzone = (x,y) => {
+    const len = Math.hypot(x,y);
+    if (len < DEADZONE) return {x:0,y:0};
+    const k = (len - DEADZONE) / (1 - DEADZONE);
+    const nx = (x/len) * k, ny = (y/len) * k;
+    return {x:nx, y:ny};
+  };
 
   const updateVec = (pointer) => {
+    if (activePointerId !== null && activePointerId !== pointer.id) return;
     const dx = pointer.x - base.x;
     const dy = pointer.y - base.y;
-    const len = Math.sqrt(dx*dx + dy*dy) || 1;
+    const len = Math.hypot(dx,dy) || 1;
     const nx = dx / len, ny = dy / len;
-    const clampedLen = Math.min(len, radius);
+    const clampedLen = Math.min(len, RADIUS);
     knob.x = base.x + nx * clampedLen;
     knob.y = base.y + ny * clampedLen;
-    this.joyVec = { x: (clampedLen/radius)*nx, y: (clampedLen/radius)*ny };
-    const tilt = Phaser.Math.Clamp(dx / 200, -0.35, 0.35);
+
+    const vx = clampedLen / RADIUS * nx;
+    const vy = clampedLen / RADIUS * ny;
+    rawVec = applyDeadzone(vx, vy);
+
+    // vizuálny „tilt“
+    const tilt = Phaser.Math.Clamp(dx / 220, -0.35, 0.35);
     base.setRotation(tilt);
   };
 
   const resetJoy = () => {
+    activePointerId = null;
     this.tweens.add({targets: knob, x: base.x, y: base.y, duration: 120, ease: 'Sine.easeOut'});
     base.setRotation(0);
-    this.joyVec = null;
+    rawVec = {x:0,y:0};
   };
 
-  this.input.on('pointerdown', (p)=>{ updateVec(p); });
-  this.input.on('pointermove', (p)=>{ if(p.isDown) updateVec(p); });
-  this.input.on('pointerup', ()=>{ resetJoy(); });
+  // smoothing tick
+  this.time.addEvent({
+    delay: 16, loop: true,
+    callback: () => {
+      const cur = this.joyVecSmoothed || {x:0,y:0};
+      this.joyVecSmoothed = {
+        x: cur.x + (rawVec.x - cur.x) * SMOOTH,
+        y: cur.y + (rawVec.y - cur.y) * SMOOTH
+      };
+      if (Math.abs(this.joyVecSmoothed.x) < 0.01 && Math.abs(this.joyVecSmoothed.y) < 0.01) {
+        this.joyVecSmoothed = null; // úplný kľud
+      }
+    }
+  });
+
+  this.input.on('pointerdown', (p)=>{ if (activePointerId===null){ activePointerId=p.id; updateVec(p); } });
+  this.input.on('pointermove', (p)=>{ if(p.isDown && p.id===activePointerId) updateVec(p); });
+  this.input.on('pointerup',   (p)=>{ if(p.id===activePointerId) resetJoy(); });
 }
 
 // keep canvas fit on resize
