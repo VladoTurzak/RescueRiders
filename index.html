@@ -1,62 +1,31 @@
-<!doctype html>
-<!-- Nickname Form -->
-<div id="nickname-form">
-<h2>🌊 Rescue Riders</h2>
-<p>Enter your nickname to begin:</p>
-<input id="nickname" type="text" maxlength="12" placeholder="Your name" autofocus />
-<br />
-<button id="start-btn">Start Game</button>
-</div>
-
-
-<!-- Game Container -->
-<div id="game-container">
-<!-- On‑screen joystick (touch only, landscape) -->
-<div id="joystick">
-<div id="joy-base"></div>
-<div id="joy-stick"></div>
-</div>
-</div>
-
-
-<!-- Phaser engine -->
+<!doctype html><html lang="en"><head>
+<meta charset="utf-8"/><title>Rescue Riders</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
+<style>
+html,body{margin:0;height:100%;overflow:hidden;background:#000;font-family:Arial,Helvetica,sans-serif}
+body{background:url('assets/hero_intro.png') center/cover no-repeat}
+#game{width:100%;height:100%;display:none;position:relative;z-index:1}
+#nick{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,.65);padding:28px 34px;border-radius:12px;color:#fff;text-align:center;z-index:9}
+#nick h2{margin:0 0 8px;color:#ffcc00}
+#nick input{width:80%;padding:10px;border:none;border-radius:8px;text-align:center}
+#nick button{margin-top:12px;padding:10px 18px;border:none;border-radius:8px;background:#ffcc00;font-weight:700;cursor:pointer}
+#rot{position:fixed;inset:0;background:#000;color:#fff;display:none;align-items:center;justify-content:center;text-align:center;z-index:99}
+#joy{position:absolute;left:16px;bottom:16px;width:100px;height:100px;display:none;z-index:5;touch-action:none}
+#jb{position:absolute;width:100px;height:100px;border-radius:50%;background:rgba(255,255,255,.08);border:2px solid rgba(255,255,255,.25)}
+#js{position:absolute;left:35px;top:35px;width:30px;height:30px;border-radius:50%;background:rgba(255,255,255,.6);box-shadow:0 0 12px rgba(0,0,0,.4)}
+@media (pointer:coarse) and (orientation:landscape){#joy{display:block}}
+@media (pointer:coarse) and (orientation:portrait){#rot{display:flex}}
+</style>
+</head><body>
+<div id="rot"><div><h3>Rotate your device</h3><p>Play in <b>landscape</b>, please.</p></div></div>
+<div id="nick"><h2>🌊 Rescue Riders</h2><p>Enter nickname:</p><input id="n" maxlength="12" placeholder="Your name" autofocus />
+<br><button id="go">Start</button></div>
+<div id="game"><div id="joy"><div id="jb"></div><div id="js"></div></div></div>
 <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
-
-
 <script>
-const form = document.getElementById('nickname-form');
-const startBtn = document.getElementById('start-btn');
-const input = document.getElementById('nickname');
-const container = document.getElementById('game-container');
-
-
-function startGame() {
-const nick = input.value.trim();
-if (!nick) { alert('Please enter your nickname first!'); return; }
-localStorage.setItem('rr_nickname', nick);
-form.style.display = 'none';
-container.style.display = 'block';
-const script = document.createElement('script');
-script.src = 'main.js';
-document.body.appendChild(script);
-}
-
-
-startBtn.addEventListener('click', startGame);
-input.addEventListener('keydown', e => { if (e.key === 'Enter') startGame(); });
-
-
-// Auto-start if nick exists
-window.addEventListener('load', () => {
-const existingNick = localStorage.getItem('rr_nickname');
-if (existingNick) {
-form.style.display = 'none';
-container.style.display = 'block';
-const script = document.createElement('script');
-script.src = 'main.js';
-document.body.appendChild(script);
-}
-});
+const f=document.getElementById('nick'),b=document.getElementById('go'),i=document.getElementById('n'),g=document.getElementById('game');
+function start(){const v=i.value.trim();if(!v)return alert('Please enter nickname');localStorage.setItem('rr_nickname',v);f.style.display='none';g.style.display='block';const s=document.createElement('script');s.src='main.js';document.body.appendChild(s)}
+b.onclick=start;i.addEventListener('keydown',e=>{if(e.key==='Enter')start()});
+addEventListener('load',()=>{if(localStorage.getItem('rr_nickname')){f.style.display='none';g.style.display='block';const s=document.createElement('script');s.src='main.js';document.body.appendChild(s)}})
 </script>
-</body>
-</html>
+</body></html>
