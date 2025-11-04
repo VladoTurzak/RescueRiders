@@ -1,15 +1,18 @@
-// Rescue Riders — Stable Landscape Browser Build (FIT 900x600, audio, smaller joystick)
+// Rescue Riders — Stable fullscreen BG (CSS cover) + world 900x600 + audio unlock + smaller joystick
 const GAME_WIDTH = 900, GAME_HEIGHT = 600;
 const MainScene = { key: 'main', preload, create, update, init };
 
 const config = {
   type: Phaser.AUTO,
   parent: 'game-container',
-  width: GAME_WIDTH,
+  width: GAME_WIDTH,           // logický svet
   height: GAME_HEIGHT,
-  backgroundColor: 0x87CEEB,
+  backgroundColor: 0x000000,   // nevidno, lebo pod tým je vždy fullscreen BG cez body
   physics: { default: 'arcade', arcade: { debug: false } },
-  scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
+  scale: {
+    mode: Phaser.Scale.FIT,    // celé pole vždy viditeľné
+    autoCenter: Phaser.Scale.CENTER_BOTH
+  },
   render: { powerPreference: 'high-performance', antialias: true, roundPixels: true },
   resolution: 1,
   fps: { target: 60, forceSetTimeOut: true },
@@ -19,9 +22,15 @@ const config = {
 let game = new Phaser.Game(config);
 game.scene.start('main', { isIntro: true });
 
-// --- helpery ---
+// ---------- Helpers ----------
+function setBodyBG(url) {
+  // fullscreen obrázky (intro, bg1-5, reward, fail) vykreslíme ako pozadie stránky bez deformácie
+  document.body.style.backgroundImage = url ? `url("${url}")` : '';
+}
+
 function hardReset(sceneCtx) {
   try { sceneCtx.sound.stopAll(); sceneCtx.engineSfx?.stop(); } catch(e){}
+  setBodyBG('assets/hero_screen.png');  // po resete ukáž intro BG
   setTimeout(() => {
     try { game.destroy(true); } catch(e){}
     game = new Phaser.Game(config);
@@ -43,7 +52,7 @@ function audioUnlock(scene) {
   scene.input.keyboard?.on('keydown', unlock);
 }
 
-// --- misie ---
+// ---------- Missions ----------
 const MISSIONS = [
   { rescued: 10, caught: 3,  time: 60, swimmerDelay: 1500, crookDelay: 7000 },
   { rescued: 12, caught: 5,  time: 55, swimmerDelay: 1400, crookDelay: 6000 },
@@ -57,7 +66,7 @@ function init(data) {
   this.isIntro = data?.isIntro ?? false;
   this.isTouch = this.sys.game.device.input.touch;
 
-  // mobilné obmedzenie spawnu pre výkon
+  // jednoduchá mobilná optimalizácia
   this.isMobilePerf = this.isTouch;
   this.MOBILE_SPAWN_SCALE = this.isMobilePerf ? 1.35 : 1.0;
   this.MAX_SWIMMERS = this.isMobilePerf ? 6 : 10;
@@ -68,7 +77,7 @@ function init(data) {
 }
 
 function preload() {
-  // intro/reward/fail + pozadia (world-size 900x600 → FIT na obrazovku)
+  // BG/intro/reward/fail – načítame pre istotu (aj keď ich dávame ako CSS pozadie, môžu byť použité aj inak)
   this.load.image('hero', 'assets/hero_screen.png');
   for (let i=1;i<=5;i++) this.load.image(`bg${i}`, `assets/bg${i}.png`);
   for (let i=1;i<=5;i++) this.load.image(`reward${i}`, `assets/reward${i}.png`);
@@ -88,7 +97,7 @@ function preload() {
   this.load.image('shark', 'assets/shark.png');
   this.load.image('shark_right', 'assets/shark_right.png');
 
-  // joystick skin
+  // joystick
   this.load.image('handle_base', 'assets/joystick/handle_base.png');
   this.load.image('handle_knob', 'assets/joystick/handle_knob.png');
 
@@ -117,10 +126,12 @@ function create() {
     down:Phaser.Input.Keyboard.KeyCodes.DOWN
   });
 
-  // INTRO
+  // ---------- INTRO ----------
   if (this.isIntro) {
-    // world-size intro (900x600) → FIT sa postará o obrazovku
-    this.add.image(GAME_WIDTH/2, GAME_HEIGHT/2, 'hero').setOrigin(0.5);
+    // fullscreen intro bez deformácie
+    setBodyBG('assets/hero_screen.png');
+
+    // text a ovládanie v world súradniciach (900x600) – FIT ich vypozicionuje
     const introText = this.isTouch ? 'Tap to start' : 'Press SPACE / ENTER or CLICK to start';
     const press = this.add.text(GAME_WIDTH/2, GAME_HEIGHT - 50, introText,
       { fontSize:'24px', color:'#fff', backgroundColor:'#000' }).setOrigin(0.5);
@@ -136,34 +147,31 @@ function create() {
     return;
   }
 
-  // HUD hudba
+  // ---------- MISSION ----------
+  // fullscreen pozadie podľa misie
+  setBodyBG(`assets/bg${this.currentMission+1}.png`);
+
   this.sound.stopAll();
   this.sound.add('mission_theme', { loop:true, volume:0.55 }).play();
-  this.engineSfx = this.sound.add('jetski_loop', { loop:true, volume:0.22 }); // spustí sa len pri pohybe
+  this.engineSfx = this.sound.add('jetski_loop', { loop:true, volume:0.22 }); // hrá len pri pohybe (viď update)
 
   const mission = MISSIONS[this.currentMission];
 
-  // pozadie world-size → FIT na obrazovku
-  const bgKey = `bg${this.currentMission+1}`;
-  if (this.textures.exists(bgKey)) {
-    this.add.image(GAME_WIDTH/2, GAME_HEIGHT/2, bgKey).setDisplaySize(GAME_WIDTH, GAME_HEIGHT).setDepth(-10);
-  }
-
-  // hráč
+  // player
   this.isFemale = Math.random() > 0.5;
   const startTexture = this.isFemale ? 'jetski_f' : 'jetski_m';
   this.player = this.physics.add.sprite(GAME_WIDTH/2, GAME_HEIGHT/2, startTexture)
     .setCollideWorldBounds(false).setSize(100,100);
 
-  // skupiny
+  // groups
   this.swimmers = this.physics.add.group();
   this.crooks = this.physics.add.group();
 
-  // spawny (mobil redšie)
+  // spawns (mobil redšie)
   this.time.addEvent({ delay: Math.round(mission.swimmerDelay * this.MOBILE_SPAWN_SCALE), callback: spawnSwimmer, callbackScope: this, loop: true });
   this.time.addEvent({ delay: Math.round(mission.crookDelay   * this.MOBILE_SPAWN_SCALE), callback: spawnCrook,   callbackScope: this, loop: true });
 
-  // žraloky
+  // sharks
   if (this.currentMission >= 3) {
     this.sharks = this.physics.add.group();
     this.time.addEvent({ delay: 6000, callback: () => spawnShark.call(this, 'right'), loop: true });
@@ -173,9 +181,9 @@ function create() {
     this.physics.add.overlap(this.player, this.sharks, hitShark, null, this);
   }
 
-  // kolízie
+  // collisions
   this.physics.add.overlap(this.player, this.swimmers, rescueSwimmer, null, this);
-  this.physics.add.collider(this.player, this.crooks, catchCrook, null, this);
+  this.physics.add.collider(this.player, this.crooks,  catchCrook,   null, this);
 
   // HUD (world coords)
   const txt = { fontSize:'22px', color:'#fff', fontStyle:'bold', fontFamily:'Arial', shadow:{ offsetX:1, offsetY:1, color:'#000', blur:3 } };
@@ -185,7 +193,7 @@ function create() {
   this.goalLabel    = this.add.text(25, 64, `🎯 Rescue ${mission.rescued} + Catch ${mission.caught}`,
                         { fontSize:'18px', color:'#003366', fontStyle:'bold', fontFamily:'Arial' });
 
-  // časovač
+  // timer
   this.timeLeft = mission.time;
   this.timerEvent = this.time.addEvent({
     delay: 1000, loop: true,
@@ -194,13 +202,15 @@ function create() {
 
   this.score = 0; this.rescued = 0; this.caught = 0;
 
-  // resety
+  // quick reset
   this.keys.r.on('down', () => hardReset(this));
   this.keys.esc.on('down', () => hardReset(this));
 
-  // ovládanie
+  // input
   this.cursors = this.input.keyboard.createCursorKeys();
-  if (this.isTouch) createHandlebarJoystick.call(this); // menší joystick vľavo dole
+
+  // ✅ menší joystick – VŽDY v zornom poli, lebo je v world (0..900×0..600) a FIT svet zväčší/centruje
+  if (this.isTouch) createHandlebarJoystick.call(this);
 }
 
 function update() {
@@ -247,7 +257,7 @@ function update() {
   }
 }
 
-// --- efekty / logika ---
+// ---------- efekty / logika ----------
 function showSplash(x,y){ const s=this.add.image(x,y,'splash').setScale(0.7); this.tweens.add({targets:s,alpha:0,duration:420,onComplete:()=>s.destroy()}); }
 function popupScore(scene,x,y,text){ const t=scene.add.text(x,y,text,{fontSize:'18px',color:'#ffff66',fontStyle:'bold',stroke:'#000',strokeThickness:3}).setDepth(999); scene.tweens.add({targets:t,y:y-26,alpha:0,duration:600,onComplete:()=>t.destroy()}); }
 
@@ -313,7 +323,8 @@ function missionComplete(){
   this.sound.stopAll();
   this.sound.add('reward_theme',{loop:true,volume:0.7}).play();
 
-  this.add.image(GAME_WIDTH/2, GAME_HEIGHT/2, `reward${this.currentMission+1}`).setDisplaySize(GAME_WIDTH, GAME_HEIGHT).setDepth(999);
+  // fullscreen reward ako BG
+  setBodyBG(`assets/reward${this.currentMission+1}.png`);
 
   if (this.currentMission === MISSIONS.length - 1) {
     const nickname = localStorage.getItem('rr_nickname') || 'Player';
@@ -323,20 +334,24 @@ function missionComplete(){
     localStorage.setItem('rr_leaderboard', JSON.stringify(leaderboard));
 
     let y = 120;
-    this.add.text(GAME_WIDTH/2, y, '🏅 TOP RESCUE RIDERS (Top 20) 🏅', { fontSize:'24px', color:'#ffff66', fontStyle:'bold' }).setOrigin(0.5).setDepth(1000);
+    this.add.text(GAME_WIDTH/2, y, '🏅 TOP RESCUE RIDERS (Top 20) 🏅',
+      { fontSize:'24px', color:'#ffff66', fontStyle:'bold' }).setOrigin(0.5).setDepth(1000);
     y += 35;
     leaderboard.forEach((e,i) => {
-      this.add.text(GAME_WIDTH/2, y + i*24, `${(i+1).toString().padStart(2,'0')}. ${e.name} — ${e.score} pts`, { fontSize:'18px', color:'#fff', fontFamily:'Courier New' }).setOrigin(0.5).setDepth(1000);
+      this.add.text(GAME_WIDTH/2, y + i*24, `${(i+1).toString().padStart(2,'0')}. ${e.name} — ${e.score} pts`,
+        { fontSize:'18px', color:'#fff', fontFamily:'Courier New' }).setOrigin(0.5).setDepth(1000);
     });
 
-    const restartText = this.add.text(GAME_WIDTH/2, GAME_HEIGHT - 48, 'Press R (or Tap) to restart the game', { fontSize:'22px', color:'#fff', backgroundColor:'#000' }).setOrigin(0.5).setDepth(1000);
+    const restartText = this.add.text(GAME_WIDTH/2, GAME_HEIGHT - 48, 'Press R (or Tap) to restart the game',
+      { fontSize:'22px', color:'#fff', backgroundColor:'#000' }).setOrigin(0.5).setDepth(1000);
     this.tweens.add({ targets: restartText, alpha:0.2, yoyo:true, repeat:-1, duration:800 });
     const restartHandler = () => { document.removeEventListener('pointerdown', restartHandler); hardReset(this); };
     document.addEventListener('pointerdown', restartHandler);
     this.keys.r.once('down', restartHandler);
   } else {
     const next=()=>this.scene.restart({currentMission:this.currentMission+1,isIntro:false});
-    const t=this.add.text(GAME_WIDTH/2, GAME_HEIGHT-48, 'Press SPACE / ENTER / TAP for next mission', { fontSize:'26px', color:'#fff', backgroundColor:'#000' }).setOrigin(0.5).setDepth(1000);
+    const t=this.add.text(GAME_WIDTH/2, GAME_HEIGHT-48, 'Press SPACE / ENTER / TAP for next mission',
+      { fontSize:'26px', color:'#fff', backgroundColor:'#000' }).setOrigin(0.5).setDepth(1000);
     this.tweens.add({targets:t,alpha:0.2,yoyo:true,repeat:-1,duration:800});
     this.input.keyboard.once('keydown-SPACE',next);
     this.input.keyboard.once('keydown-ENTER',next);
@@ -349,23 +364,27 @@ function failMission(){
   this.engineSfx?.stop();
   this.sound.stopAll();
   this.sound.add('fail_theme',{loop:true,volume:0.7}).play();
-  this.add.image(GAME_WIDTH/2, GAME_HEIGHT/2, 'fail').setDisplaySize(GAME_WIDTH, GAME_HEIGHT).setDepth(999);
-  const t=this.add.text(GAME_WIDTH/2, GAME_HEIGHT-48, 'Press SPACE / ENTER / TAP to retry', { fontSize:'26px', color:'#fff', backgroundColor:'#000' }).setOrigin(0.5).setDepth(1000);
+
+  // fullscreen fail ako BG
+  setBodyBG('assets/fail.png');
+
+  const t=this.add.text(GAME_WIDTH/2, GAME_HEIGHT-48, 'Press SPACE / ENTER / TAP to retry',
+    { fontSize:'26px', color:'#fff', backgroundColor:'#000' }).setOrigin(0.5).setDepth(1000);
   this.tweens.add({targets:t,alpha:0.2,yoyo:true,repeat:-1,duration:800});
+
   const retry=()=>this.scene.restart({currentMission:this.currentMission,isIntro:false});
   this.input.keyboard.once('keydown-SPACE',retry);
   this.input.keyboard.once('keydown-ENTER',retry);
   this.input.once('pointerdown',retry);
 }
 
-// --- joystick: menší vľavo dole (len na dotykových zariadeniach) ---
+// ---------- joystick: menší a vždy viditeľný (world coords) ----------
 function createHandlebarJoystick(){
-  const baseX = 110;                      // od ľavého okraja worldu
-  const baseY = GAME_HEIGHT - 85;         // od spodného okraja worldu
+  const baseX = 95;                   // od ľavého okraja worldu
+  const baseY = GAME_HEIGHT - 85;     // od spodného okraja worldu
   const base = this.add.image(baseX, baseY, 'handle_base').setDepth(1501).setAlpha(0.9).setScale(0.6);
   const knob = this.add.image(baseX, baseY, 'handle_knob').setDepth(1502).setAlpha(0.98).setScale(0.56);
 
-  // keďže používame FIT a HUD je kreslený v worlde, joystick prirodzene drží roh (900×600 sa škáluje celé)
   const RADIUS = 60, DEAD = 0.18, SMOOTH = 0.22;
   let activeId = null, raw = {x:0,y:0}; this.joyVecSmoothed = null;
 
@@ -374,9 +393,8 @@ function createHandlebarJoystick(){
     const k=(l-DEAD)/(1-DEAD); return {x:(x/l)*k, y:(y/l)*k};
   };
 
-  const updateVec = (p) => {
-    if (activeId!==null && activeId!==p.id) return;
-    // pointer coords sú vo viewport pixeloch; pre world FIT použijeme this.input.activePointer.worldX/Y (už škálované)
+  const updateVec = () => {
+    // worldX/Y už rešpektuje FIT, takže drží pozíciu v worlde
     const dx = this.input.activePointer.worldX - base.x;
     const dy = this.input.activePointer.worldY - base.y;
     const len = Math.hypot(dx,dy) || 1, nx=dx/len, ny=dy/len, cl=Math.min(len,RADIUS);
@@ -396,7 +414,7 @@ function createHandlebarJoystick(){
     if (Math.abs(this.joyVecSmoothed.x)<0.01 && Math.abs(this.joyVecSmoothed.y)<0.01) this.joyVecSmoothed=null;
   }});
 
-  this.input.on('pointerdown', (p)=>{ if(activeId===null){ activeId=p.id; updateVec(p); } });
-  this.input.on('pointermove', (p)=>{ if(p.isDown && p.id===activeId) updateVec(p); });
+  this.input.on('pointerdown', (p)=>{ if(activeId===null){ activeId=p.id; updateVec(); } });
+  this.input.on('pointermove', (p)=>{ if(p.isDown && p.id===activeId) updateVec(); });
   this.input.on('pointerup',   (p)=>{ if(p.id===activeId) reset(); });
 }
