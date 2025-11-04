@@ -1,7 +1,4 @@
-// Rescue Riders — Universal Mobile/Desktop (Improved Mobile Controls & Performance)
-// Fixes: precise joystick (deadzone + smoothing), capped spawns on mobile, constant-speed movement, engine sfx only on move,
-// fullscreen intro/reward/fail "contain", high-performance renderer, capped resolution for mobile perf.
-
+// Rescue Riders — Universal Mobile/Desktop (Fix: joystick size, full field on mobile, audio unlock)
 const GAME_WIDTH = 900, GAME_HEIGHT = 600;
 const MainScene = { key: 'main', preload, create, update, init };
 
@@ -13,9 +10,8 @@ const config = {
   backgroundColor: 0x87CEEB,
   physics: { default: 'arcade', arcade: { debug: false } },
   scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
-  // 🔧 render/perf
   render: { powerPreference: 'high-performance', antialias: true, roundPixels: true, transparent: false },
-  resolution: 1, // cap DPR to 1 on mobile for performance
+  resolution: 1,
   fps: { target: 60, forceSetTimeOut: true },
   scene: [MainScene]
 };
@@ -33,13 +29,30 @@ function hardReset(sceneCtx) {
   }, 30);
 }
 
-// Fit image to full screen without distortion (contain)
+// Fullscreen image (contain) – používa this.scale.* (nie config.*)
 function placeFullscreenImage(key, depth = 0) {
+  const w = this.scale.width, h = this.scale.height;
   const tex = this.textures.get(key).getSourceImage();
   const iw = tex.width, ih = tex.height;
-  const scale = Math.min(config.width / iw, config.height / ih);
-  return this.add.image(config.width / 2, config.height / 2, key)
-    .setOrigin(0.5).setDepth(depth).setScale(scale);
+  const s = Math.min(w / iw, h / ih);
+  return this.add.image(w / 2, h / 2, key).setOrigin(0.5).setDepth(depth).setScale(s);
+}
+
+// Mobile audio unlock (iOS/Android blokujú auto-play)
+function setupAudioUnlock(scene) {
+  if (scene.__audioUnlocked) return;
+  const unlock = async () => {
+    try {
+      if (scene.sound && scene.sound.context && scene.sound.context.state === 'suspended') {
+        await scene.sound.context.resume();
+      }
+      scene.__audioUnlocked = true;
+    } catch(e){}
+    scene.input.off('pointerdown', unlock);
+    scene.input.keyboard?.off('keydown', unlock);
+  };
+  scene.input.on('pointerdown', unlock);
+  scene.input.keyboard?.on('keydown', unlock);
 }
 
 // Missions
@@ -56,24 +69,22 @@ function init(data) {
   this.isIntro = data?.isIntro ?? false;
   this.isTouch = this.sys.game.device.input.touch;
 
-  // 🔧 Mobile perf profile
+  // mobilné nastavenia výkonu
   this.isMobilePerf = this.isTouch;
-  this.MOBILE_SPAWN_SCALE = this.isMobilePerf ? 1.35 : 1.0;   // redšie spawny na mobile
+  this.MOBILE_SPAWN_SCALE = this.isMobilePerf ? 1.35 : 1.0;
   this.MAX_SWIMMERS = this.isMobilePerf ? 6 : 10;
   this.MAX_CROOKS   = this.isMobilePerf ? 3 : 6;
 
-  // pohyb
-  this.BASE_SPEED = 260;              // px/s
+  this.BASE_SPEED = 260;
   this.MOBILE_SPEED = this.isMobilePerf ? 240 : this.BASE_SPEED;
 }
 
 function preload() {
   this.load.image('hero', 'assets/hero_screen.png');
-  ['jetski_m','jetski_m_left','jetski_m_up','jetski_m_down',
-   'jetski_f','jetski_f_left','jetski_f_up','jetski_f_down']
-   .forEach(j => this.load.image(j, `assets/${j}.png`));
+  ['jetski_m','jetski_m_left','jetski_m_up','jetski_m_down','jetski_f','jetski_f_left','jetski_f_up','jetski_f_down']
+    .forEach(j => this.load.image(j, `assets/${j}.png`));
   ['swimmer_m','swimmer_f','crook','crook_left','splash']
-   .forEach(a => this.load.image(a, `assets/${a}.png`));
+    .forEach(a => this.load.image(a, `assets/${a}.png`));
   this.load.image('shark', 'assets/shark.png');
   this.load.image('shark_right', 'assets/shark_right.png');
   for (let i=1;i<=5;i++) this.load.image(`bg${i}`, `assets/bg${i}.png`);
@@ -90,8 +101,9 @@ function preload() {
 }
 
 function create() {
-  this.offsetX = (config.width - GAME_WIDTH) / 2;
-  this.offsetY = (config.height - GAME_HEIGHT) / 2;
+  // ⚠️ offsety počítaj z this.scale (nie config)
+  this.offsetX = (this.scale.width  - GAME_WIDTH) / 2;
+  this.offsetY = (this.scale.height - GAME_HEIGHT) / 2;
 
   this.keys = this.input.keyboard.addKeys({
     space:Phaser.Input.Keyboard.KeyCodes.SPACE,
@@ -104,12 +116,14 @@ function create() {
     right:Phaser.Input.Keyboard.KeyCodes.RIGHT
   });
 
+  setupAudioUnlock(this);
+
   // --- INTRO ---
   if (this.isIntro) {
     placeFullscreenImage.call(this, 'hero', -10);
     const isMobile = this.isTouch;
     const introText = isMobile ? 'Tap to start' : 'Press SPACE / ENTER or CLICK to start';
-    const press = this.add.text(config.width/2, config.height-80, introText,
+    const press = this.add.text(this.scale.width/2, this.scale.height-80, introText,
       {fontSize: isMobile? '28px':'26px', color:'#fff', backgroundColor:'#000'}).setOrigin(0.5).setDepth(5);
     this.tweens.add({targets:press,alpha:0.2,yoyo:true,repeat:-1,duration:800});
 
@@ -125,17 +139,19 @@ function create() {
 
   // --- MISSION MUSIC ---
   this.sound.stopAll();
-  this.sound.add('mission_theme', { loop:true, volume:0.45 }).play();
-
-  // engine sfx pripravený, nehrá
-  this.engineSfx = this.sound.add('jetski_loop', { loop:true, volume:2 });
+  this.sound.add('mission_theme', { loop:true, volume:0.55 }).play();
+  this.engineSfx = this.sound.add('jetski_loop', { loop:true, volume:0.22 }); // nespúšťať hneď
 
   const mission=MISSIONS[this.currentMission];
-  const bgKey=`bg${this.currentMission+1}`;
-  if(this.textures.exists(bgKey))
-    this.add.image(config.width/2,config.height/2,bgKey).setOrigin(0.5).setDepth(-10).setDisplaySize(config.width,config.height);
 
-  // player
+  // pozadie cez celú obrazovku
+  const bgKey=`bg${this.currentMission+1}`;
+  if(this.textures.exists(bgKey)){
+    this.add.image(this.scale.width/2,this.scale.height/2,bgKey)
+      .setOrigin(0.5).setDepth(-10).setDisplaySize(this.scale.width,this.scale.height);
+  }
+
+  // hráč v strede herného poľa (nie obrazovky)
   this.isFemale=Math.random()>0.5;
   const startTexture=this.isFemale?'jetski_f':'jetski_m';
   this.player=this.physics.add.sprite(
@@ -144,17 +160,17 @@ function create() {
     startTexture
   ).setCollideWorldBounds(false).setSize(100,100);
 
-  // groups
+  // skupiny
   this.swimmers=this.physics.add.group();
   this.crooks=this.physics.add.group();
 
-  // spawns (mobil = redšie)
+  // spawny (mobil redšie)
   const swimDelay = Math.round(mission.swimmerDelay * this.MOBILE_SPAWN_SCALE);
   const crookDelay = Math.round(mission.crookDelay * this.MOBILE_SPAWN_SCALE);
   this.time.addEvent({delay:swimDelay, callback:spawnSwimmer, callbackScope:this, loop:true});
   this.time.addEvent({delay:crookDelay, callback:spawnCrook, callbackScope:this, loop:true});
 
-  // sharks
+  // žraloky
   if(this.currentMission>=3){
     this.sharks=this.physics.add.group();
     this.time.addEvent({delay:6000,callback:()=>spawnShark.call(this,'right'),loop:true});
@@ -163,13 +179,13 @@ function create() {
     this.physics.add.overlap(this.player,this.sharks,hitShark,null,this);
   }
 
-  // collisions
+  // kolízie
   this.physics.add.overlap(this.player,this.swimmers,rescueSwimmer,null,this);
   this.physics.add.collider(this.player,this.crooks,catchCrook,null,this);
 
-  // panel
+  // panel (pozície z this.scale / offsety)
   const panelY=this.offsetY+10;
-  const isSmall = Math.min(window.innerWidth, window.innerHeight) < 800;
+  const isSmall = Math.min(this.scale.width, this.scale.height) < 800;
   const scaleFont = isSmall ? 1.2 : 1.0;
   const txt={fontSize:`${Math.round(22*scaleFont)}px`,color:'#fff',fontStyle:'bold',fontFamily:'Arial',shadow:{offsetX:1,offsetY:1,color:'#000',blur:3}};
   this.missionLabel=this.add.text(this.offsetX+30,panelY+12,`⭐ MISSION ${this.currentMission+1}`,txt);
@@ -178,7 +194,7 @@ function create() {
   this.goalLabel=this.add.text(this.offsetX+25,this.offsetY+65,`🎯 Rescue ${mission.rescued} + Catch ${mission.caught}`,
     {fontSize:`${Math.round(18*scaleFont)}px`,color:'#003366',fontStyle:'bold',fontFamily:'Arial'});
 
-  // timer
+  // časovač
   this.timeLeft=mission.time;
   this.timerEvent=this.time.addEvent({
     delay:1000,loop:true,
@@ -187,7 +203,7 @@ function create() {
 
   this.score=0;this.rescued=0;this.caught=0;
 
-  // keys
+  // klávesy
   const onHardReset = (e) => { if (!e.repeat) hardReset(this); };
   this.keys.r.on('down', onHardReset);
   this.keys.esc.on('down', onHardReset);
@@ -200,11 +216,9 @@ function create() {
 function update(){
   if(!this.player)return;
 
-  // dt (konzistentný pohyb)
   const dt = this.game.loop.delta / 1000;
   const speed = this.isTouch ? this.MOBILE_SPEED : this.BASE_SPEED;
 
-  // keyboard
   if(!this.isTouch){
     let vx=0, vy=0;
     if(this.keys.left.isDown){vx=-speed; this.player.setTexture(this.isFemale?'jetski_f_left':'jetski_m_left');}
@@ -213,7 +227,6 @@ function update(){
     else if(this.keys.down.isDown){vy= speed; this.player.setTexture(this.isFemale?'jetski_f_down':'jetski_m_down');}
     this.player.setVelocity(vx, vy);
   } else {
-    // joystick (smoothed vector)
     if (this.joyVecSmoothed) {
       const jx = this.joyVecSmoothed.x, jy = this.joyVecSmoothed.y;
       this.player.setVelocity(jx*speed, jy*speed);
@@ -231,12 +244,12 @@ function update(){
     }
   }
 
-  // clamp
+  // clamp v rámci herného poľa
   const halfW=this.player.displayWidth/2, halfH=this.player.displayHeight/2;
   this.player.x=Phaser.Math.Clamp(this.player.x,this.offsetX+halfW,this.offsetX+GAME_WIDTH-halfW);
   this.player.y=Phaser.Math.Clamp(this.player.y,this.offsetY+halfH,this.offsetY+GAME_HEIGHT-halfH);
 
-  // engine sound by speed
+  // motor len pri pohybe
   if (this.engineSfx && this.player.body) {
     const v = this.player.body.velocity;
     const sp = Math.hypot(v.x||0, v.y||0);
@@ -245,12 +258,12 @@ function update(){
   }
 }
 
-// effects
+// efekty
 function showSplash(x,y){const s=this.add.image(x,y,'splash').setScale(0.7);this.tweens.add({targets:s,alpha:0,duration:420,onComplete:()=>s.destroy()});}
 function popupScore(scene,x,y,text){ const t=scene.add.text(x,y,text,{fontSize:'18px',color:'#ffff66',fontStyle:'bold',stroke:'#000',strokeThickness:3}).setDepth(999);
   scene.tweens.add({targets:t,y:y-26,alpha:0,duration:600,onComplete:()=>t.destroy()}); }
 
-// logic
+// logika
 function rescueSwimmer(player,swimmer){
   swimmer.destroy();
   this.score+=10;this.rescued++;
@@ -300,7 +313,7 @@ function hitShark(player,shark){
   shark.destroy();
   this.score=Math.max(0,this.score-30);
   this.scoreLabel.setText(`💯 SCORE ${this.score}`);
-  const flash=this.add.rectangle(config.width/2,config.height/2,config.width,config.height,0xff0000,0.28).setDepth(999);
+  const flash=this.add.rectangle(this.scale.width/2,this.scale.height/2,this.scale.width,this.scale.height,0xff0000,0.28).setDepth(999);
   this.tweens.add({targets:flash,alpha:0,duration:340,onComplete:()=>flash.destroy()});
   showSplash.call(this,player.x,player.y); popupScore(this,player.x,player.y,'-30');
 }
@@ -316,8 +329,7 @@ function missionComplete(){
   this.sound.stopAll();
   this.sound.add('reward_theme',{loop:true,volume:0.7}).play();
 
-  const rewardKey = `reward${this.currentMission+1}`;
-  placeFullscreenImage.call(this, rewardKey, 999);
+  placeFullscreenImage.call(this, `reward${this.currentMission+1}`, 999);
 
   if(this.currentMission===MISSIONS.length-1){
     const nickname = localStorage.getItem('rr_nickname') || 'Player';
@@ -328,17 +340,17 @@ function missionComplete(){
     leaderboard = leaderboard.slice(0, 20);
     localStorage.setItem('rr_leaderboard', JSON.stringify(leaderboard));
 
-    let y = Math.max(120, config.height * 0.35);
-    this.add.text(config.width / 2, y, '🏅 TOP RESCUE RIDERS (Top 20) 🏅',
+    let y = Math.max(120, this.scale.height * 0.35);
+    this.add.text(this.scale.width / 2, y, '🏅 TOP RESCUE RIDERS (Top 20) 🏅',
       { fontSize:'24px', color:'#ffff66', fontStyle:'bold' }).setOrigin(0.5).setDepth(1000);
     y += 35;
     leaderboard.forEach((e,i) => {
-      this.add.text(config.width / 2, y + i*24,
+      this.add.text(this.scale.width / 2, y + i*24,
         `${(i+1).toString().padStart(2,'0')}. ${e.name} — ${e.score} pts`,
         { fontSize:'18px', color:'#fff', fontFamily:'Courier New' }).setOrigin(0.5).setDepth(1000);
     });
 
-    const restartText = this.add.text(config.width / 2, config.height - 60,
+    const restartText = this.add.text(this.scale.width / 2, this.scale.height - 60,
       'Press R (or Tap) to restart the game',
       { fontSize: '22px', color: '#fff', backgroundColor: '#000' })
       .setOrigin(0.5).setDepth(1000);
@@ -348,7 +360,7 @@ function missionComplete(){
     this.keys.r.once('down', restartHandler);
   } else {
     const next=()=>this.scene.restart({currentMission:this.currentMission+1,isIntro:false});
-    const t=this.add.text(config.width/2,config.height-60,'Press SPACE / ENTER / TAP for next mission',
+    const t=this.add.text(this.scale.width/2,this.scale.height-60,'Press SPACE / ENTER / TAP for next mission',
       {fontSize:'26px',color:'#fff',backgroundColor:'#000'}).setOrigin(0.5).setDepth(1000);
     this.tweens.add({targets:t,alpha:0.2,yoyo:true,repeat:-1,duration:800});
     this.input.keyboard.once('keydown-SPACE',next);
@@ -364,7 +376,7 @@ function failMission(){
   this.sound.add('fail_theme',{loop:true,volume:0.7}).play();
   placeFullscreenImage.call(this, 'fail', 999);
   const retry=()=>this.scene.restart({currentMission:this.currentMission,isIntro:false});
-  const t=this.add.text(config.width/2,config.height-60,'Press SPACE / ENTER / TAP to retry',
+  const t=this.add.text(this.scale.width/2,this.scale.height-60,'Press SPACE / ENTER / TAP to retry',
     {fontSize:'26px',color:'#fff',backgroundColor:'#000'}).setOrigin(0.5).setDepth(1000);
   this.tweens.add({targets:t,alpha:0.2,yoyo:true,repeat:-1,duration:800});
   this.input.keyboard.once('keydown-SPACE',retry);
@@ -372,18 +384,18 @@ function failMission(){
   this.input.once('pointerdown',retry);
 }
 
-// --- Mobile joystick (handlebars): deadzone + smoothing + pointer lock ---
+// --- Joystick (zmenšený ~na 60 % + menší radius) ---
 function createHandlebarJoystick(){
-  const pad = Math.min(this.scale.width, this.scale.height) * 0.08;
-  const baseX = pad + 180;
-  const baseY = this.scale.height - pad - 120;
+  const pad = Math.min(this.scale.width, this.scale.height) * 0.06; // menší okraj
+  const baseX = pad + 120;                                         // bližšie k rohu
+  const baseY = this.scale.height - pad - 90;
 
-  const base = this.add.image(baseX, baseY, 'handle_base').setDepth(1001).setAlpha(0.9).setScale(0.9);
-  const knob = this.add.image(baseX, baseY, 'handle_knob').setDepth(1002).setAlpha(0.98).setScale(0.8);
+  const base = this.add.image(baseX, baseY, 'handle_base').setDepth(1001).setAlpha(0.9).setScale(0.6);
+  const knob = this.add.image(baseX, baseY, 'handle_knob').setDepth(1002).setAlpha(0.98).setScale(0.56);
 
-  const RADIUS = 84;
-  const DEADZONE = 0.18;       // presnejší stred
-  const SMOOTH = 0.22;         // low-pass filter (0..1)
+  const RADIUS = 60;            // menší dosah (presnejšie)
+  const DEADZONE = 0.18;
+  const SMOOTH = 0.22;
 
   let activePointerId = null;
   let rawVec = {x:0,y:0};
@@ -411,7 +423,6 @@ function createHandlebarJoystick(){
     const vy = clampedLen / RADIUS * ny;
     rawVec = applyDeadzone(vx, vy);
 
-    // vizuálny „tilt“
     const tilt = Phaser.Math.Clamp(dx / 220, -0.35, 0.35);
     base.setRotation(tilt);
   };
@@ -423,7 +434,6 @@ function createHandlebarJoystick(){
     rawVec = {x:0,y:0};
   };
 
-  // smoothing tick
   this.time.addEvent({
     delay: 16, loop: true,
     callback: () => {
@@ -433,7 +443,7 @@ function createHandlebarJoystick(){
         y: cur.y + (rawVec.y - cur.y) * SMOOTH
       };
       if (Math.abs(this.joyVecSmoothed.x) < 0.01 && Math.abs(this.joyVecSmoothed.y) < 0.01) {
-        this.joyVecSmoothed = null; // úplný kľud
+        this.joyVecSmoothed = null;
       }
     }
   });
@@ -443,7 +453,7 @@ function createHandlebarJoystick(){
   this.input.on('pointerup',   (p)=>{ if(p.id===activePointerId) resetJoy(); });
 }
 
-// keep canvas fit on resize
+// resize: prepočítaj scale + offsety (aby bolo celé pole viditeľné)
 window.addEventListener('resize', () => {
   if (!game) return;
   game.scale.resize(window.innerWidth, window.innerHeight);
