@@ -6,27 +6,9 @@
   <meta name="viewport"
         content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
   <style>
-    html, body {
-      height: 100%;
-      margin: 0;
-      background: #000;
-      overflow: hidden;
-    }
-    /* 🖼️ Fullscreen pozadie – nastavuje ho main.js cez document.body.style.background */
-    body {
-      background-position: center center;
-      background-repeat: no-repeat;
-      background-size: cover;       /* zachová pomer, vždy vyplní obrazovku */
-      background-color: #87CEEB;    /* fallback, kým sa nenastaví obrázok */
-    }
-    #game-container {
-      width: 100vw;
-      height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-    canvas { display:block; }
+    html, body { height: 100%; margin: 0; background: #000; overflow: hidden; }
+    #game-container { width: 100vw; height: 100vh; }
+    canvas { display: block; }
   </style>
 </head>
 <body>
