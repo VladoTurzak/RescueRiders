@@ -3,23 +3,30 @@
 <head>
   <meta charset="utf-8" />
   <title>Rescue Riders — Play Now</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover, orientation=landscape">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="viewport"
+        content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
   <style>
-    html, body { height:100%; margin:0; background:#000; overflow:hidden; }
-    #game-container { width:100vw; height:100vh; display:flex; align-items:center; justify-content:center; background:#000; }
-    canvas { display:block; image-rendering:pixelated; }
-
-    /* Force-landscape vizuálne: v portréte otočí celé telo o 90° */
-    @media (orientation: portrait) {
-      body {
-        transform: rotate(90deg);
-        transform-origin: center center;
-        width: 100vh;
-        height: 100vw;
-      }
+    html, body {
+      height: 100%;
+      margin: 0;
+      background: #000;
+      overflow: hidden;
     }
+    /* 🖼️ Fullscreen pozadie – nastavuje ho main.js cez document.body.style.background */
+    body {
+      background-position: center center;
+      background-repeat: no-repeat;
+      background-size: cover;       /* zachová pomer, vždy vyplní obrazovku */
+      background-color: #87CEEB;    /* fallback, kým sa nenastaví obrázok */
+    }
+    #game-container {
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    canvas { display:block; }
   </style>
 </head>
 <body>
