@@ -1,64 +1,180 @@
-<!doctype html><html lang="en"><head>
-<meta charset="utf-8"/><title>Rescue Riders</title>
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
-<style>
-  html,body{margin:0;height:100%;overflow:hidden;background:#000;font-family:Arial,Helvetica,sans-serif}
-  /* full-screen background image behind canvas */
-  body{background:url('assets/hero_intro.png') center/cover no-repeat}
-  #game{position:relative;width:100vw;height:100vh;display:none;z-index:1}
-  /* nickname modal */
-  #nick{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,.65);padding:28px 34px;border-radius:12px;color:#fff;text-align:center;z-index:9}
-  #nick h2{margin:0 0 8px;color:#ffcc00}
-  #nick input{width:80%;padding:10px;border:none;border-radius:8px;text-align:center}
-  #nick button{margin-top:12px;padding:10px 18px;border:none;border-radius:8px;background:#ffcc00;font-weight:700;cursor:pointer}
-  /* on-screen joystick (touch only) */
-  #joy{position:absolute;left:16px;bottom:16px;width:100px;height:100px;display:none;z-index:5;touch-action:none}
-  #jb{position:absolute;width:100px;height:100px;border-radius:50%;background:rgba(255,255,255,.08);border:2px solid rgba(255,255,255,.25)}
-  #js{position:absolute;left:35px;top:35px;width:30px;height:30px;border-radius:50%;background:rgba(255,255,255,.6);box-shadow:0 0 12px rgba(0,0,0,.4)}
-  /* joystick len na dotykových zariadeniach (portrait aj landscape povolené) */
-  @media (pointer:coarse){#joy{display:block}}
-</style>
-</head><body>
-  <!-- Nickname form -->
-  <div id="nick">
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Rescue Riders — Play Now</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    html, body {
+      margin: 0; padding: 0; height: 100%;
+      overflow: hidden; background: #000;
+      font-family: Arial, Helvetica, sans-serif;
+    }
+
+    /* 🔹 Fullscreen background (iba dekor) – plátno je v #game-container */
+    body { background: url('assets/hero_intro.png') center/cover no-repeat; }
+
+    /* 🎮 Game container – presne ako má tvoj main.js */
+    #game-container { width:100%; height:100%; position:relative; z-index:1; display:none; }
+
+    /* 💬 Nickname modal */
+    #nickname-form {
+      position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+      background:rgba(0,0,0,.65); padding:32px 40px; border-radius:14px;
+      color:#fff; text-align:center; z-index:3; box-shadow:0 0 30px rgba(0,0,0,.6);
+      animation:fadeIn .8s ease;
+    }
+    #nickname-form h2 { margin:0 0 8px; color:#ffcc00; }
+    #nickname-form input {
+      width:80%; padding:10px; border:none; border-radius:8px; text-align:center; outline:none;
+    }
+    #nickname-form button {
+      margin-top:12px; padding:10px 22px; border:none; border-radius:8px;
+      background:#ffcc00; color:#000; font-weight:700; cursor:pointer;
+    }
+    #nickname-form button:hover { background:#ffe55c; transform:scale(1.03); }
+    @keyframes fadeIn { from{opacity:0; transform:translate(-50%,-46%)} to{opacity:1; transform:translate(-50%,-50%)} }
+
+    /* 🕹️ On-screen joystick (HTML overlay) */
+    #rr-joy { position:absolute; left:16px; bottom:16px; width:110px; height:110px; z-index:5; display:none; touch-action:none; }
+    #rr-joy-base {
+      position:absolute; width:110px; height:110px; border-radius:50%;
+      background:rgba(255,255,255,.08); border:2px solid rgba(255,255,255,.25);
+    }
+    #rr-joy-stick {
+      position:absolute; left:40px; top:40px; width:30px; height:30px; border-radius:50%;
+      background:rgba(255,255,255,.7); box-shadow:0 0 12px rgba(0,0,0,.4);
+      transition:transform .04s linear;
+    }
+
+    /* Zobraz joystick iba na dotykových zariadeniach (desktop bez zmeny) */
+    @media (pointer:coarse) {
+      #rr-joy { display:block; }
+    }
+  </style>
+</head>
+<body>
+  <!-- 💬 Nickname Form -->
+  <div id="nickname-form">
     <h2>🌊 Rescue Riders</h2>
     <p>Enter your nickname to begin:</p>
-    <input id="n" maxlength="12" placeholder="Your name" autofocus />
-    <br><button id="go">Start</button>
+    <input id="nickname" type="text" maxlength="12" placeholder="Your name" autofocus />
+    <br />
+    <button id="start-btn">Start Game</button>
   </div>
 
-  <!-- Game container + joystick -->
-  <div id="game">
-    <div id="joy"><div id="jb"></div><div id="js"></div></div>
+  <!-- 🎮 Game Container -->
+  <div id="game-container">
+    <!-- 🕹️ Joystick overlay (iba mobil/touch) -->
+    <div id="rr-joy">
+      <div id="rr-joy-base"></div>
+      <div id="rr-joy-stick"></div>
+    </div>
   </div>
 
+  <!-- Phaser engine -->
   <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
+
   <script>
-    const form=document.getElementById('nick'),
-          btn=document.getElementById('go'),
-          inp=document.getElementById('n'),
-          gameEl=document.getElementById('game');
+    const form = document.getElementById('nickname-form');
+    const startBtn = document.getElementById('start-btn');
+    const input = document.getElementById('nickname');
+    const container = document.getElementById('game-container');
 
-    function start(){
-      const v=inp.value.trim();
-      if(!v) return alert('Please enter nickname');
-      localStorage.setItem('rr_nickname',v);
-      form.style.display='none';
-      gameEl.style.display='block';
-      const s=document.createElement('script');
-      s.src='main.js';
-      document.body.appendChild(s);
+    function startGame() {
+      const nick = input.value.trim();
+      if (!nick) { alert('Please enter your nickname first!'); return; }
+      localStorage.setItem('rr_nickname', nick);
+      form.style.display = 'none';
+      container.style.display = 'block';
+
+      // načítaj main.js po zadaní nicku (tvoj pôvodný kód zostáva)
+      const script = document.createElement('script');
+      script.src = 'main.js';
+      document.body.appendChild(script);
     }
-    btn.onclick=start;
-    inp.addEventListener('keydown',e=>{ if(e.key==='Enter') start(); });
 
-    // autostart ak už máme nick
-    addEventListener('load',()=>{
-      if(localStorage.getItem('rr_nickname')){
-        form.style.display='none';
-        gameEl.style.display='block';
-        const s=document.createElement('script'); s.src='main.js'; document.body.appendChild(s);
+    startBtn.addEventListener('click', startGame);
+    input.addEventListener('keydown', e => { if (e.key === 'Enter') startGame(); });
+
+    // ak už je nick, spusti rovno
+    window.addEventListener('load', () => {
+      if (localStorage.getItem('rr_nickname')) {
+        form.style.display = 'none';
+        container.style.display = 'block';
+        const script = document.createElement('script');
+        script.src = 'main.js';
+        document.body.appendChild(script);
       }
     });
+
+    /* ===========================================================
+       🕹️ Joystick -> simulácia šípok (bez zásahu do main.js)
+       - Držaním páčky vysielame keydown Arrow*; pri uvoľnení keyup.
+       - Phaser KeyboardPlugin to normálne zachytí.
+       =========================================================== */
+    (function setupJoystick(){
+      const isTouch = matchMedia('(pointer:coarse)').matches;
+      if (!isTouch) return; // desktop: nič nemeníme
+
+      const joy = document.getElementById('rr-joy');
+      const knob = document.getElementById('rr-joy-stick');
+      const base = document.getElementById('rr-joy-base');
+      if (!joy || !knob || !base) return;
+
+      const R = 44; // polomer pohybu gombíka
+      let state = {L:false,R:false,U:false,D:false};
+
+      function rect(){ return joy.getBoundingClientRect(); }
+      function center(){ const r=rect(); return {x:r.left+r.width/2, y:r.top+r.height/2}; }
+
+      function send(key, type){
+        const code = key;
+        const kcMap = {ArrowLeft:37, ArrowUp:38, ArrowRight:39, ArrowDown:40};
+        const evt = new KeyboardEvent(type, {key, code, keyCode:kcMap[key], which:kcMap[key], bubbles:true});
+        window.dispatchEvent(evt);
+      }
+
+      function applyDirections(dir){
+        // prepneme len zmenené smery (aby sme neposielali spam)
+        const want = {L:dir.x<-0.35, R:dir.x>0.35, U:dir.y<-0.35, D:dir.y>0.35};
+
+        if (want.L && !state.L) send('ArrowLeft','keydown');
+        if (!want.L && state.L) send('ArrowLeft','keyup');
+
+        if (want.R && !state.R) send('ArrowRight','keydown');
+        if (!want.R && state.R) send('ArrowRight','keyup');
+
+        if (want.U && !state.U) send('ArrowUp','keydown');
+        if (!want.U && state.U) send('ArrowUp','keyup');
+
+        if (want.D && !state.D) send('ArrowDown','keydown');
+        if (!want.D && state.D) send('ArrowDown','keyup');
+
+        state = want;
+      }
+
+      function moveTo(clientX, clientY){
+        const c = center();
+        let dx = clientX - c.x, dy = clientY - c.y;
+        const len = Math.hypot(dx,dy) || 1;
+        if (len > R){ dx = dx/len*R; dy = dy/len*R; }
+        knob.style.transform = `translate(${40+dx}px, ${40+dy}px)`;
+        applyDirections({x: dx/R, y: dy/R});
+      }
+
+      function release(){
+        knob.style.transform = 'translate(40px, 40px)';
+        // uvoľni všetky aktívne smery
+        ['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].forEach(k=>send(k,'keyup'));
+        state = {L:false,R:false,U:false,D:false};
+      }
+
+      base.addEventListener('touchstart', e=>{ const t=e.changedTouches[0]; moveTo(t.clientX,t.clientY); }, {passive:true});
+      base.addEventListener('touchmove',  e=>{ const t=e.changedTouches[0]; moveTo(t.clientX,t.clientY); }, {passive:true});
+      base.addEventListener('touchend',   release, {passive:true});
+      base.addEventListener('touchcancel',release, {passive:true});
+    })();
   </script>
-</body></html>
+</body>
+</html>
