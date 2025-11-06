@@ -61,6 +61,24 @@ function init(data) {
   this.currentMission = data?.currentMission ?? 0;
   this.isIntro = data?.isIntro ?? false;
 }
+// 16:9 cover pre aktuálny viewport
+function sizeCover16x9(viewW, viewH){
+  const R = 16/9;
+  if (viewW / viewH >= R) {
+    // okno je širšie než 16:9 -> berieme plnú šírku, výšku dopočítame
+    return { W: viewW, H: Math.ceil(viewW * 9 / 16) };
+  } else {
+    // okno je užšie -> berieme plnú výšku, šírku dopočítame
+    return { W: Math.ceil(viewH * 16 / 9), H: viewH };
+  }
+}
+
+function resizeBg16x9(){
+  if (!this.bgImage) return;
+  const w = this.scale.width, h = this.scale.height;
+  const { W, H } = sizeCover16x9(w, h);
+  this.bgImage.setPosition(w/2, h/2).setDisplaySize(W, H);
+}
 
 function preload() {
   this.load.image('hero', 'assets/hero_screen.png');
@@ -124,9 +142,14 @@ function create() {
 
 
   const mission=MISSIONS[this.currentMission];
-  const bgKey=`bg${this.currentMission+1}`;
-  if(this.textures.exists(bgKey)) showFullscreenImageStretch(this, bgKey).setDepth(-10); // <-- stretch pre pozadie
-
+  const bgKey = `bg${this.currentMission+1 || this.mi+1}`;
+if (this.textures.exists(bgKey)) {
+  // 16:9 cover background
+  this.bgImage = this.add.image(this.scale.width/2, this.scale.height/2, bgKey)
+                         .setOrigin(0.5)
+                         .setDepth(-100);  // nech je bezpečne pod všetkým
+  resizeBg16x9.call(this);
+}
   // hráč
   this.isFemale=Math.random()>0.5;
   const startTexture=this.isFemale?'jetski_f':'jetski_m';
