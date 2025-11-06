@@ -3,56 +3,42 @@
 <head>
   <meta charset="utf-8" />
   <title>Rescue Riders — Play Now</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
   <style>
     html,body{margin:0;height:100%;overflow:hidden;background:#000;font-family:Arial,Helvetica,sans-serif}
-    /* fullscreen background za hrou */
     body{background:url('assets/hero_intro.png') center/cover no-repeat}
 
     /* wrapper cez celý viewport */
-    #stage{position:fixed; inset:0; z-index:1}
+    #stage{position:fixed; inset:0; z-index:1; pointer-events:none;} /* 🔒 pred štartom pasívne */
 
-    /* kontajner na canvas – nič nevykresľuje, iba drží pozíciu/veľkosť */
-    #fit-layer{
-      position:absolute; left:0; top:0; width:100%; height:100%;
-      /* platno centrované ručne cez JS – nevyužívame flex, aby sme mali presnú kontrolu */
-      pointer-events:none; /* joystick prekryje podľa potreby */
-    }
+    /* kontajner pre canvas */
+    #fit-layer{position:absolute; left:0; top:0; width:100%; height:100%}
 
-    /* joystick */
+    /* joystick (zapneme ho až po štarte hry) */
     :root{ --joy: min(22vmin, 120px); --knob: calc(var(--joy)*.30) }
-    #joy{
-      position:fixed; width:var(--joy); height:var(--joy);
-      touch-action:none; display:none; z-index:5;
-    }
+    #joy{position:fixed; width:var(--joy); height:var(--joy); touch-action:none; display:none; z-index:5}
     #joy-base{position:absolute; inset:0; border-radius:50%; background:rgba(255,255,255,.08); border:2px solid rgba(255,255,255,.25)}
-    #joy-stick{
-      position:absolute; width:var(--knob); height:var(--knob);
-      left:calc(50% - var(--knob)/2); top:calc(50% - var(--knob)/2);
-      border-radius:50%; background:rgba(255,255,255,.75); box-shadow:0 0 12px rgba(0,0,0,.45);
-      will-change:transform; transition:transform .03s linear
-    }
+    #joy-stick{position:absolute; width:var(--knob); height:var(--knob); left:calc(50% - var(--knob)/2); top:calc(50% - var(--knob)/2); border-radius:50%; background:rgba(255,255,255,.75); box-shadow:0 0 12px rgba(0,0,0,.45); will-change:transform; transition:transform .03s linear}
 
-    /* blok portrétu (iba touch) */
-    #rotate-block{
-      position:fixed; inset:0; display:none; align-items:center; justify-content:center;
-      background:#000; color:#fff; text-align:center; z-index:9999; padding:24px;
-    }
+    /* portrét blok (iba touch) */
+    #rotate-block{position:fixed; inset:0; display:none; align-items:center; justify-content:center; background:#000; color:#fff; text-align:center; z-index:9999; padding:24px}
     #rotate-block .card{max-width:560px}
     #rotate-block h3{margin:0 0 8px; font-size:22px}
-
-    /* touch pravidlá */
     @media (pointer:coarse) and (orientation:portrait){ #rotate-block{display:flex} }
-    @media (pointer:coarse) and (orientation:landscape){ #joy{display:block} }
 
-    /* nickname modal */
+    /* nickname modal – najvyššia vrstva, full focus */
     #nick{
       position:fixed; left:50%; top:50%; transform:translate(-50%,-50%);
       background:rgba(0,0,0,.65); padding:32px 40px; border-radius:14px; color:#fff; text-align:center;
-      z-index:10; box-shadow:0 0 30px rgba(0,0,0,.6); animation:fadeIn .8s ease;
+      z-index:10000; box-shadow:0 0 30px rgba(0,0,0,.6); animation:fadeIn .8s ease;
     }
     #nick h2{margin:0 0 8px; color:#ffcc00}
-    #nick input{width:80%; padding:10px; border:none; border-radius:8px; text-align:center}
+    #nick input{
+      width:80%; padding:10px; border:none; border-radius:8px; text-align:center; outline:none;
+      -webkit-user-select:text; user-select:text; /* iOS focus */
+      touch-action:manipulation;                     /* iOS tap */
+      background:#fff; color:#000;
+    }
     #nick button{margin-top:12px; padding:10px 22px; border:none; border-radius:8px; background:#ffcc00; color:#000; font-weight:700; cursor:pointer}
     #nick button:hover{background:#ffe55c; transform:scale(1.03)}
     @keyframes fadeIn{from{opacity:0; transform:translate(-50%,-46%)} to{opacity:1; transform:translate(-50%,-50%)}}
@@ -60,127 +46,93 @@
 </head>
 <body>
   <!-- portrét blok -->
-  <div id="rotate-block">
-    <div class="card">
-      <h3>Rotate your device</h3>
-      <p>Rescue Riders je dostupný iba v <b>landscape</b> režime.</p>
-    </div>
-  </div>
+  <div id="rotate-block"><div class="card">
+    <h3>Rotate your device</h3><p>Rescue Riders je dostupný iba v <b>landscape</b> režime.</p>
+  </div></div>
 
   <!-- nickname -->
   <div id="nick">
     <h2>🌊 Rescue Riders</h2>
     <p>Enter your nickname to begin:</p>
     <input id="n" maxlength="12" placeholder="Your name" autofocus />
-    <br />
-    <button id="go">Start Game</button>
+    <br /><button id="go">Start</button>
   </div>
 
-  <!-- celá scéna -->
+  <!-- scéna -->
   <div id="stage">
-    <!-- vrstva, do ktorej Phaser vykreslí canvas; fit riešime CSS rozmermi a absolútnou pozíciou -->
     <div id="fit-layer"></div>
-
-    <!-- joystick (umiestňujeme ho k ľavému dolnému ROHU plátna) -->
-    <div id="joy">
-      <div id="joy-base"></div>
-      <div id="joy-stick"></div>
-    </div>
+    <div id="joy"><div id="joy-base"></div><div id="joy-stick"></div></div>
   </div>
 
   <!-- Phaser -->
   <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
 
   <script>
-    // ====== štart hry (main.js ostáva nedotknutý) ======
-    const GW=900, GH=600, R=GW/GH; // logická veľkosť tvojej hry
-    const nick=document.getElementById('nick'), go=document.getElementById('go'), inp=document.getElementById('n');
-    const layer=document.getElementById('fit-layer'), joy=document.getElementById('joy'), knob=document.getElementById('joy-stick'), base=document.getElementById('joy-base');
+    const GW=900, GH=600, R=GW/GH;
+    const nickEl=document.getElementById('nick'), go=document.getElementById('go'), inp=document.getElementById('n');
+    const stage=document.getElementById('stage'), layer=document.getElementById('fit-layer');
+    const joy=document.getElementById('joy'), knob=document.getElementById('joy-stick'), base=document.getElementById('joy-base');
 
-    function startGame(){
-      const v=inp.value.trim(); if(!v){alert('Please enter your nickname');return;}
-      localStorage.setItem('rr_nickname',v);
-      nick.style.display='none';
-
-      // injektuj main.js (tvoj pôvodný kód vytvorí <canvas>)
+    function mountMain(){
       const s=document.createElement('script'); s.src='main.js'; document.body.appendChild(s);
 
-      // čakaj na canvas a nastav FIT bez zmeny logiky (žiadne game.scale.resize!)
       const wait=setInterval(()=>{
         const cv=document.querySelector('#fit-layer canvas') || document.querySelector('canvas');
         if(!cv) return;
         clearInterval(wait);
-        // presuň canvas do fit-layer (ak ho main.js vložil inde)
         if(cv.parentElement!==layer) layer.appendChild(cv);
-        // pre lepší upscale
-        cv.style.imageRendering='auto'; // alebo 'pixelated' ak chceš retro
+        cv.style.imageRendering='auto';
 
-        function applyFit(){
-          const WW=window.innerWidth, WH=window.innerHeight;
-          let w,h;
-          if(WW/WH>R){ h=WH; w=Math.floor(h*R); } else { w=WW; h=Math.floor(w/R); }
-
-          // nastav **CSS** rozmery (logické rozmery 900×600 nechávame bez zmeny)
-          cv.style.position='absolute';
-          cv.style.width=w+'px';
-          cv.style.height=h+'px';
-          cv.style.left=((WW-w)/2)+'px';
-          cv.style.top=((WH-h)/2)+'px';
-
-          // joystick prilepíme k ľavému-dolnému rohu plátna
-          const pad=16;
-          joy.style.left=((WW-w)/2 + pad)+'px';
-          joy.style.top=( (WH-h)/2 + (h - parseFloat(getComputedStyle(joy).height)) - pad )+'px';
+        // teraz už môžeme zapnúť interakcie pre stage a zobraziť joystick (iba touch+landscape)
+        stage.style.pointerEvents='auto';
+        if (window.matchMedia && matchMedia('(pointer:coarse)').matches && matchMedia('(orientation:landscape)').matches){
+          joy.style.display='block';
         }
 
-        applyFit();
-        addEventListener('resize', applyFit);
-        addEventListener('orientationchange', ()=>setTimeout(applyFit,50));
+        function fit(){
+          const WW=window.innerWidth, WH=window.innerHeight;
+          let w,h; if(WW/WH>R){ h=WH; w=Math.floor(h*R);} else { w=WW; h=Math.floor(w/R);}
+          cv.style.position='absolute'; cv.style.width=w+'px'; cv.style.height=h+'px';
+          cv.style.left=((WW-w)/2)+'px'; cv.style.top=((WH-h)/2)+'px';
+          const pad=16;
+          const joyH=parseFloat(getComputedStyle(joy).height)||0;
+          joy.style.left=((WW-w)/2 + pad)+'px';
+          joy.style.top=((WH-h)/2 + h - joyH - pad)+'px';
+        }
+        fit(); addEventListener('resize',fit); addEventListener('orientationchange',()=>setTimeout(fit,50));
       },20);
     }
 
-    go.onclick=startGame;
-    inp.addEventListener('keydown',e=>{ if(e.key==='Enter') startGame(); });
+    function startGame(){
+      const v=inp.value.trim(); if(!v){alert('Please enter your nickname'); inp.focus(); return;}
+      localStorage.setItem('rr_nickname',v);
+      nickEl.style.display='none';
+      mountMain();
+    }
 
-    // autostart (ak už bol nick)
-    addEventListener('load',()=>{
-      if(localStorage.getItem('rr_nickname')){
-        nick.style.display='none';
-        startGame();
-      }
+    go.addEventListener('click', startGame);
+    inp.addEventListener('keydown', e=>{ if(e.key==='Enter') startGame(); });
+    // po načítaní zafokusuj input (iOS)
+    window.addEventListener('load', ()=>{ setTimeout(()=>{ try{ inp.focus(); }catch{} }, 50);
+      if(localStorage.getItem('rr_nickname')){ nickEl.style.display='none'; mountMain(); }
     });
 
-    // ====== Joystick -> simulácia šípok (bez zmeny main.js) ======
+    /* Joystick -> simulácia šípok (zapnuté až po startGame, keď stage povolí pointer-events) */
     (function(){
       const isTouch = window.matchMedia && matchMedia('(pointer:coarse)').matches;
-      if(!isTouch || !joy || !knob || !base) return;
-
+      if(!isTouch) return;
       let state={L:false,R:false,U:false,D:false};
-      const send=(key,type)=>{
-        const map={ArrowLeft:37,ArrowUp:38,ArrowRight:39,ArrowDown:40};
-        const evt=new KeyboardEvent(type,{key,code:key,keyCode:map[key],which:map[key],bubbles:true});
-        window.dispatchEvent(evt);
-      };
-      function center(){
-        const r=joy.getBoundingClientRect();
-        return {x:r.left+r.width/2,y:r.top+r.height/2,rad:Math.min(r.width,r.height)*0.4};
-      }
-      function move(x,y){
-        const c=center(); let dx=x-c.x, dy=y-c.y; const len=Math.hypot(dx,dy)||1, R=c.rad;
-        if(len>R){dx=dx/len*R;dy=dy/len*R;}
-        knob.style.transform=`translate(${dx}px,${dy}px)`;
-        const nx=dx/R, ny=dy/R; const want={L:nx<-0.35,R:nx>0.35,U:ny<-0.35,D:ny>0.35};
-        if (want.L && !state.L) send('ArrowLeft','keydown'); if (!want.L && state.L) send('ArrowLeft','keyup');
-        if (want.R && !state.R) send('ArrowRight','keydown'); if (!want.R && state.R) send('ArrowRight','keyup');
-        if (want.U && !state.U) send('ArrowUp','keydown');   if (!want.U && state.U) send('ArrowUp','keyup');
-        if (want.D && !state.D) send('ArrowDown','keydown'); if (!want.D && state.D) send('ArrowDown','keyup');
-        state=want;
-      }
-      function release(){
-        knob.style.transform='translate(0px,0px)';
-        ['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].forEach(k=>send(k,'keyup'));
-        state={L:false,R:false,U:false,D:false};
-      }
+      const send=(key,type)=>{ const map={ArrowLeft:37,ArrowUp:38,ArrowRight:39,ArrowDown:40};
+        window.dispatchEvent(new KeyboardEvent(type,{key,code:key,keyCode:map[key],which:map[key],bubbles:true})); };
+      function center(){ const r=joy.getBoundingClientRect(); return {x:r.left+r.width/2,y:r.top+r.height/2,rad:Math.min(r.width,r.height)*0.4}; }
+      function move(x,y){ const c=center(); let dx=x-c.x,dy=y-c.y; const len=Math.hypot(dx,dy)||1,R=c.rad; if(len>R){dx=dx/len*R;dy=dy/len*R}
+        knob.style.transform=`translate(${dx}px,${dy}px)`; const nx=dx/R,ny=dy/R; const want={L:nx<-0.35,R:nx>0.35,U:ny<-0.35,D:ny>0.35};
+        if(want.L&&!state.L)send('ArrowLeft','keydown'); if(!want.L&&state.L)send('ArrowLeft','keyup');
+        if(want.R&&!state.R)send('ArrowRight','keydown'); if(!want.R&&state.R)send('ArrowRight','keyup');
+        if(want.U&&!state.U)send('ArrowUp','keydown');   if(!want.U&&state.U)send('ArrowUp','keyup');
+        if(want.D&&!state.D)send('ArrowDown','keydown'); if(!want.D&&state.D)send('ArrowDown','keyup');
+        state=want; }
+      function release(){ knob.style.transform='translate(0px,0px)'; ['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].forEach(k=>send(k,'keyup')); state={L:false,R:false,U:false,D:false}; }
       base.addEventListener('touchstart',e=>{const t=e.changedTouches[0];move(t.clientX,t.clientY)},{passive:true});
       base.addEventListener('touchmove', e=>{const t=e.changedTouches[0];move(t.clientX,t.clientY)},{passive:true});
       base.addEventListener('touchend',  release,{passive:true});
