@@ -6,37 +6,38 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
   <style>
     html,body{margin:0;height:100%;overflow:hidden;background:#000;font-family:Arial,Helvetica,sans-serif}
-    /* 16:9 COVER background – meníme z main.js podľa misie */
-    body{background:#000 center/cover no-repeat}
 
-    /* len landscape na touch */
+    /* Portrait blok (iba touch) – stále landscape */
     #rotate-block{
-      position:fixed;inset:0;display:none;align-items:center;justify-content:center;
-      background:#000;color:#fff;z-index:9999;text-align:center;padding:24px
+      position:fixed; inset:0; display:none; align-items:center; justify-content:center;
+      background:#000; color:#fff; z-index:9999; text-align:center; padding:24px
     }
     #rotate-block .card{max-width:560px}
-    #rotate-block h3{margin:0 0 8px;font-size:22px}
-    @media (pointer:coarse) and (orientation:portrait){#rotate-block{display:flex}}
+    #rotate-block h3{margin:0 0 8px; font-size:22px}
+    @media (pointer:coarse) and (orientation:portrait){ #rotate-block{display:flex} }
 
-    /* Stage – uprostred bude canvas 4:3 (len CSS fit), žiadny resize vo Phaseri */
-    #stage{position:fixed;inset:0;z-index:1}
-    canvas{position:absolute;image-rendering:auto} /* nič viac – rozmer nastavíme JS-om */
+    /* Kontajner pre hru – Phaser canvas bude centrovaný a škálovaný len cez CSS */
+    #game-container{position:fixed; inset:0; z-index:1}
 
-    /* nickname modal */
+    /* Phaser canvas – 900×600 (logicky), CSS ho len prispôsobí (letterbox 4:3) */
+    #game-container canvas{ position:absolute; image-rendering:auto; }
+
+    /* Nickname modal */
     #nick{
-      position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);
-      background:rgba(0,0,0,.65);padding:32px 40px;border-radius:14px;color:#fff;text-align:center;z-index:10000
+      position:fixed; left:50%; top:50%; transform:translate(-50%,-50%);
+      background:rgba(0,0,0,.65); padding:32px 40px; border-radius:14px; color:#fff; text-align:center;
+      z-index:10000; box-shadow:0 0 30px rgba(0,0,0,.6);
     }
-    #nick h2{margin:0 0 8px;color:#ffcc00}
-    #nick input{width:80%;padding:10px;border:none;border-radius:8px;text-align:center;outline:none;background:#fff;color:#000}
-    #nick button{margin-top:12px;padding:10px 22px;border:none;border-radius:8px;background:#ffcc00;color:#000;font-weight:700;cursor:pointer}
+    #nick h2{margin:0 0 8px; color:#ffcc00}
+    #nick input{width:80%; padding:10px; border:none; border-radius:8px; text-align:center; outline:none; background:#fff; color:#000}
+    #nick button{margin-top:12px; padding:10px 22px; border:none; border-radius:8px; background:#ffcc00; color:#000; font-weight:700; cursor:pointer}
 
-    /* joystick (väčší a citlivejší) – prilepíme k ĽD rohu canvasu */
-    :root{--joy:min(26vmin,150px);--knob:calc(var(--joy)*.34)}
-    #joy{position:fixed;width:var(--joy);height:var(--joy);touch-action:none;display:none;z-index:5}
-    #joy-base{position:absolute;inset:0;border-radius:50%;background:rgba(255,255,255,.10);border:2px solid rgba(255,255,255,.30)}
-    #joy-stick{position:absolute;width:var(--knob);height:var(--knob);left:calc(50% - var(--knob)/2);top:calc(50% - var(--knob)/2);border-radius:50%;background:rgba(255,255,255,.85);box-shadow:0 0 14px rgba(0,0,0,.5);will-change:transform;transition:transform .02s linear}
-    @media (pointer:coarse) and (orientation:landscape){#joy{display:block}}
+    /* Joystick – väčší, citlivejší; prilepený k ľavému dolnému rohu CANVASU */
+    :root{ --joy:min(26vmin,150px); --knob:calc(var(--joy)*.34) }
+    #joy{ position:fixed; width:var(--joy); height:var(--joy); touch-action:none; display:none; z-index:5 }
+    #joy-base{ position:absolute; inset:0; border-radius:50%; background:rgba(255,255,255,.10); border:2px solid rgba(255,255,255,.30) }
+    #joy-stick{ position:absolute; width:var(--knob); height:var(--knob); left:calc(50% - var(--knob)/2); top:calc(50% - var(--knob)/2); border-radius:50%; background:rgba(255,255,255,.85); box-shadow:0 0 14px rgba(0,0,0,.5); will-change:transform; transition:transform .02s linear }
+    @media (pointer:coarse) and (orientation:landscape){ #joy{display:block} }
   </style>
 </head>
 <body>
@@ -49,34 +50,37 @@
     <br /><button id="go">Start</button>
   </div>
 
-  <div id="stage">
+  <div id="game-container">
     <div id="joy"><div id="joy-base"></div><div id="joy-stick"></div></div>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
   <script>
-    const GW=900, GH=600, R=GW/GH;
-    const nick=document.getElementById('nick'), inp=document.getElementById('n'), go=document.getElementById('go');
-    const joy=document.getElementById('joy'), knob=document.getElementById('joy-stick');
+    const GC = document.getElementById('game-container');
+    const nick = document.getElementById('nick'), inp = document.getElementById('n'), go = document.getElementById('go');
+    const joy = document.getElementById('joy'), knob = document.getElementById('joy-stick');
 
-    function sizeCanvasToWindow(){
-      const cv=document.querySelector('canvas'); if(!cv) return;
-      const WW=innerWidth, WH=innerHeight;
-      let w,h; if(WW/WH>R){ h=WH; w=Math.floor(h*R);} else { w=WW; h=Math.floor(w/R); }
-      cv.style.width=w+'px'; cv.style.height=h+'px';
-      cv.style.left=((WW-w)/2)+'px'; cv.style.top=((WH-h)/2)+'px';
-      // joystick do ľavého dolného rohu canvasu
-      const joyH=parseFloat(getComputedStyle(joy).height)||0, pad=16;
-      joy.style.left=((WW-w)/2 + pad)+'px';
-      joy.style.top=((WH-h)/2 + h - joyH - pad)+'px';
+    /* FIT canvas (len CSS) – udrž 4:3 (900×600) a vycentruj bez orezania */
+    function fitCanvas(){
+      const cv = GC.querySelector('canvas'); if(!cv) return;
+      const R = 900/600;
+      const WW = innerWidth, WH = innerHeight;
+      let w,h; if(WW/WH > R){ h = WH; w = Math.floor(h*R); } else { w = WW; h = Math.floor(w/R); }
+      cv.style.width = w+'px';  cv.style.height = h+'px';
+      cv.style.left  = ((WW - w)/2)+'px';
+      cv.style.top   = ((WH - h)/2)+'px';
+
+      // Joystick do ĽD rohu canvasu
+      const joyH = parseFloat(getComputedStyle(joy).height)||0, pad=16;
+      joy.style.left = ((WW - w)/2 + pad) + 'px';
+      joy.style.top  = ((WH - h)/2 + h - joyH - pad) + 'px';
     }
 
     function boot(){
-      // spustenie hry
-      const s=document.createElement('script'); s.src='main.js'; document.body.appendChild(s);
-      const wait=setInterval(()=>{ const cv=document.querySelector('canvas'); if(cv){ clearInterval(wait); sizeCanvasToWindow(); addEventListener('resize',sizeCanvasToWindow);} },20);
+      const s = document.createElement('script'); s.src = 'main.js'; document.body.appendChild(s);
+      const wait = setInterval(()=>{ const cv = GC.querySelector('canvas'); if(cv){ clearInterval(wait); fitCanvas(); addEventListener('resize', fitCanvas); } }, 20);
 
-      // joystick – nízky prah, väčší polomer, dotyk na celej ploche
+      // Joystick – citlivejší prah, väčší polomer, touch z celej plochy
       (function(){
         const touchLandscape = matchMedia('(pointer:coarse)').matches && matchMedia('(orientation:landscape)').matches;
         if(!touchLandscape) return;
@@ -103,16 +107,16 @@
     }
 
     function start(){
-      const v=inp.value.trim(); if(!v){alert('Please enter your nickname'); return;}
-      localStorage.setItem('rr_nickname',v);
-      nick.style.display='none';
+      const v = inp.value.trim(); if(!v){alert('Please enter your nickname'); return;}
+      localStorage.setItem('rr_nickname', v);
+      nick.style.display = 'none';
       boot();
     }
     go.addEventListener('click', start);
     inp.addEventListener('keydown', e=>{ if(e.key==='Enter') start(); });
 
     addEventListener('load', ()=>{
-      const v=localStorage.getItem('rr_nickname');
+      const v = localStorage.getItem('rr_nickname');
       if(v){ nick.style.display='none'; boot(); }
     });
   </script>
