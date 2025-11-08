@@ -1,1 +1,120 @@
-qq
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Rescue Riders</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+  <style>
+    html,body{margin:0;height:100%;overflow:hidden;background:#000;font-family:Arial,Helvetica,sans-serif}
+    /* 16:9 COVER background – meníme z main.js podľa misie */
+    body{background:#000 center/cover no-repeat}
+
+    /* len landscape na touch */
+    #rotate-block{
+      position:fixed;inset:0;display:none;align-items:center;justify-content:center;
+      background:#000;color:#fff;z-index:9999;text-align:center;padding:24px
+    }
+    #rotate-block .card{max-width:560px}
+    #rotate-block h3{margin:0 0 8px;font-size:22px}
+    @media (pointer:coarse) and (orientation:portrait){#rotate-block{display:flex}}
+
+    /* Stage – uprostred bude canvas 4:3 (len CSS fit), žiadny resize vo Phaseri */
+    #stage{position:fixed;inset:0;z-index:1}
+    canvas{position:absolute;image-rendering:auto} /* nič viac – rozmer nastavíme JS-om */
+
+    /* nickname modal */
+    #nick{
+      position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);
+      background:rgba(0,0,0,.65);padding:32px 40px;border-radius:14px;color:#fff;text-align:center;z-index:10000
+    }
+    #nick h2{margin:0 0 8px;color:#ffcc00}
+    #nick input{width:80%;padding:10px;border:none;border-radius:8px;text-align:center;outline:none;background:#fff;color:#000}
+    #nick button{margin-top:12px;padding:10px 22px;border:none;border-radius:8px;background:#ffcc00;color:#000;font-weight:700;cursor:pointer}
+
+    /* joystick (väčší a citlivejší) – prilepíme k ĽD rohu canvasu */
+    :root{--joy:min(26vmin,150px);--knob:calc(var(--joy)*.34)}
+    #joy{position:fixed;width:var(--joy);height:var(--joy);touch-action:none;display:none;z-index:5}
+    #joy-base{position:absolute;inset:0;border-radius:50%;background:rgba(255,255,255,.10);border:2px solid rgba(255,255,255,.30)}
+    #joy-stick{position:absolute;width:var(--knob);height:var(--knob);left:calc(50% - var(--knob)/2);top:calc(50% - var(--knob)/2);border-radius:50%;background:rgba(255,255,255,.85);box-shadow:0 0 14px rgba(0,0,0,.5);will-change:transform;transition:transform .02s linear}
+    @media (pointer:coarse) and (orientation:landscape){#joy{display:block}}
+  </style>
+</head>
+<body>
+  <div id="rotate-block"><div class="card"><h3>Rotate your device</h3><p>Playable only in <b>landscape</b>.</p></div></div>
+
+  <div id="nick">
+    <h2>🌊 Rescue Riders</h2>
+    <p>Enter your nickname to begin:</p>
+    <input id="n" maxlength="12" placeholder="Your name" autofocus />
+    <br /><button id="go">Start</button>
+  </div>
+
+  <div id="stage">
+    <div id="joy"><div id="joy-base"></div><div id="joy-stick"></div></div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
+  <script>
+    const GW=900, GH=600, R=GW/GH;
+    const nick=document.getElementById('nick'), inp=document.getElementById('n'), go=document.getElementById('go');
+    const joy=document.getElementById('joy'), knob=document.getElementById('joy-stick');
+
+    function sizeCanvasToWindow(){
+      const cv=document.querySelector('canvas'); if(!cv) return;
+      const WW=innerWidth, WH=innerHeight;
+      let w,h; if(WW/WH>R){ h=WH; w=Math.floor(h*R);} else { w=WW; h=Math.floor(w/R); }
+      cv.style.width=w+'px'; cv.style.height=h+'px';
+      cv.style.left=((WW-w)/2)+'px'; cv.style.top=((WH-h)/2)+'px';
+      // joystick do ľavého dolného rohu canvasu
+      const joyH=parseFloat(getComputedStyle(joy).height)||0, pad=16;
+      joy.style.left=((WW-w)/2 + pad)+'px';
+      joy.style.top=((WH-h)/2 + h - joyH - pad)+'px';
+    }
+
+    function boot(){
+      // spustenie hry
+      const s=document.createElement('script'); s.src='main.js'; document.body.appendChild(s);
+      const wait=setInterval(()=>{ const cv=document.querySelector('canvas'); if(cv){ clearInterval(wait); sizeCanvasToWindow(); addEventListener('resize',sizeCanvasToWindow);} },20);
+
+      // joystick – nízky prah, väčší polomer, dotyk na celej ploche
+      (function(){
+        const touchLandscape = matchMedia('(pointer:coarse)').matches && matchMedia('(orientation:landscape)').matches;
+        if(!touchLandscape) return;
+        let state={L:false,R:false,U:false,D:false};
+        const TH=0.20;
+        const send=(key,type)=>{ const m={ArrowLeft:37,ArrowUp:38,ArrowRight:39,ArrowDown:40};
+          window.dispatchEvent(new KeyboardEvent(type,{key,code:key,keyCode:m[key],which:m[key],bubbles:true})); };
+        function center(){ const r=joy.getBoundingClientRect(); return {x:r.left+r.width/2,y:r.top+r.height/2,rad:Math.min(r.width,r.height)*0.48}; }
+        function move(x,y){ const c=center(); let dx=x-c.x,dy=y-c.y; const L=Math.hypot(dx,dy)||1,R=c.rad; if(L>R){dx=dx/L*R;dy=dy/L*R}
+          knob.style.transform=`translate(${dx}px,${dy}px)`; const nx=dx/R, ny=dy/R;
+          const want={L:nx<-TH,R:nx>TH,U:ny<-TH,D:ny>TH};
+          if(want.L&&!state.L)send('ArrowLeft','keydown'); if(!want.L&&state.L)send('ArrowLeft','keyup');
+          if(want.R&&!state.R)send('ArrowRight','keydown'); if(!want.R&&state.R)send('ArrowRight','keyup');
+          if(want.U&&!state.U)send('ArrowUp','keydown');   if(!want.U&&state.U)send('ArrowUp','keyup');
+          if(want.D&&!state.D)send('ArrowDown','keydown'); if(!want.D&&state.D)send('ArrowDown','keyup');
+          state=want; }
+        function release(){ knob.style.transform='translate(0px,0px)'; ['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].forEach(k=>send(k,'keyup')); state={L:false,R:false,U:false,D:false}; }
+        joy.addEventListener('touchstart',e=>{const t=e.changedTouches[0];move(t.clientX,t.clientY)},{passive:true});
+        joy.addEventListener('touchmove', e=>{const t=e.changedTouches[0];move(t.clientX,t.clientY)},{passive:true});
+        joy.addEventListener('touchend',  release,{passive:true});
+        joy.addEventListener('touchcancel',release,{passive:true});
+        addEventListener('resize', release);
+      })();
+    }
+
+    function start(){
+      const v=inp.value.trim(); if(!v){alert('Please enter your nickname'); return;}
+      localStorage.setItem('rr_nickname',v);
+      nick.style.display='none';
+      boot();
+    }
+    go.addEventListener('click', start);
+    inp.addEventListener('keydown', e=>{ if(e.key==='Enter') start(); });
+
+    addEventListener('load', ()=>{
+      const v=localStorage.getItem('rr_nickname');
+      if(v){ nick.style.display='none'; boot(); }
+    });
+  </script>
+</body>
+</html>
