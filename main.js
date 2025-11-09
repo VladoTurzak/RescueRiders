@@ -1,4 +1,4 @@
-// Rescue Riders — pevné 900×600 (4:3), desktop-identické. ŽIADNY runtime resize vo Phaseri.
+// Rescue Riders — pevné 900×600 (3:2), desktop-identické. ŽIADNY runtime resize vo Phaseri.
 const GAME_WIDTH = 900, GAME_HEIGHT = 600;
 
 const MainScene = { key:'main', preload, create, update, init };
@@ -25,7 +25,7 @@ function showFullscreenImageFit(scene, key){
   return img;
 }
 function showFullscreenImageCover(scene, key){
-  // „cover“ v rámci 900×600 (nie na okno): nič sa nedeformuje, ale zaplní celé 4:3 pole
+  // „cover“ v rámci 900×600 (nie na okno): nič sa nedeformuje, ale zaplní celé pole
   const W = GAME_WIDTH, H = GAME_HEIGHT;
   const img = scene.add.image(W/2, H/2, key).setOrigin(0.5);
   const scale = Math.max(W/img.width, H/img.height);
@@ -202,15 +202,17 @@ function catchCrook(player,crook){
 function spawnSwimmer(){
   const x=Phaser.Math.Between(50,GAME_WIDTH-50), y=Phaser.Math.Between(50,GAME_HEIGHT-50);
   const t=Math.random()>0.5?'swimmer_m':'swimmer_f';
-  const s=this.swimmers.create(x,y,t);
+  const s=this.swimmers?.create(x,y,t) ?? this.physics.add.group().create(x,y,t);
   s.setVelocity(Phaser.Math.Between(-60,60),Phaser.Math.Between(-40,40)).setBounce(1,1).setSize(70,70);
 }
 function spawnCrook(){
   const side=Phaser.Math.Between(0,1), y=Phaser.Math.Between(80,GAME_HEIGHT-80);
   let x,v,tx; if(side){ x=-50; v=Phaser.Math.Between(80,150); tx='crook'; } else { x=GAME_WIDTH+50; v=Phaser.Math.Between(-150,-80); tx='crook_left'; }
-  const c=this.crooks.create(x,y,tx); c.setVelocity(v,0).setImmovable(true).setSize(90,90);
+  const c=this.crooks?.create(y?x:x,y,tx) ?? this.physics.add.group().create(x,y,tx);
+  c.setVelocity(v,0).setImmovable(true).setSize(90,90);
 }
 function spawnShark(direction='right'){
+  if(!this.sharks) this.sharks = this.physics.add.group();
   const y=Phaser.Math.Between(100,GAME_HEIGHT-100); let x,v,tx;
   if(direction==='right'){ x=GAME_WIDTH+120; v=Phaser.Math.Between(-250,-200); tx='shark'; }
   else { x=-120; v=Phaser.Math.Between(200,250); tx='shark_right'; }
