@@ -19,7 +19,7 @@
     /* Kontajner pre hru – Phaser canvas bude centrovaný a škálovaný len cez CSS */
     #game-container{position:fixed; inset:0; z-index:1}
 
-    /* Phaser canvas – 900×600 (logicky), CSS ho len prispôsobí (letterbox 4:3) */
+    /* Phaser canvas – 900×600 (logicky), CSS ho len prispôsobí (letterbox 3:2) */
     #game-container canvas{ position:absolute; image-rendering:auto; }
 
     /* Nickname modal */
@@ -54,13 +54,17 @@
     <div id="joy"><div id="joy-base"></div><div id="joy-stick"></div></div>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
+  <!-- Phaser najprv -->
+  <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js" defer></script>
+  <!-- Hra staticky (žiadne dynamické injektovanie) -->
+  <script src="main.js" defer></script>
+
   <script>
     const GC = document.getElementById('game-container');
     const nick = document.getElementById('nick'), inp = document.getElementById('n'), go = document.getElementById('go');
     const joy = document.getElementById('joy'), knob = document.getElementById('joy-stick');
 
-    /* FIT canvas (len CSS) – udrž 4:3 (900×600) a vycentruj bez orezania */
+    /* FIT canvas (len CSS) – udrž 3:2 (900×600) a vycentruj bez orezania */
     function fitCanvas(){
       const cv = GC.querySelector('canvas'); if(!cv) return;
       const R = 900/600;
@@ -76,49 +80,49 @@
       joy.style.top  = ((WH - h)/2 + h - joyH - pad) + 'px';
     }
 
-    function boot(){
-      const s = document.createElement('script'); s.src = 'main.js'; document.body.appendChild(s);
-      const wait = setInterval(()=>{ const cv = GC.querySelector('canvas'); if(cv){ clearInterval(wait); fitCanvas(); addEventListener('resize', fitCanvas); } }, 20);
-
-      // Joystick – citlivejší prah, väčší polomer, touch z celej plochy
-      (function(){
-        const touchLandscape = matchMedia('(pointer:coarse)').matches && matchMedia('(orientation:landscape)').matches;
-        if(!touchLandscape) return;
-        let state={L:false,R:false,U:false,D:false};
-        const TH=0.20;
-        const send=(key,type)=>{ const m={ArrowLeft:37,ArrowUp:38,ArrowRight:39,ArrowDown:40};
-          window.dispatchEvent(new KeyboardEvent(type,{key,code:key,keyCode:m[key],which:m[key],bubbles:true})); };
-        function center(){ const r=joy.getBoundingClientRect(); return {x:r.left+r.width/2,y:r.top+r.height/2,rad:Math.min(r.width,r.height)*0.48}; }
-        function move(x,y){ const c=center(); let dx=x-c.x,dy=y-c.y; const L=Math.hypot(dx,dy)||1,R=c.rad; if(L>R){dx=dx/L*R;dy=dy/L*R}
-          knob.style.transform=`translate(${dx}px,${dy}px)`; const nx=dx/R, ny=dy/R;
-          const want={L:nx<-TH,R:nx>TH,U:ny<-TH,D:ny>TH};
-          if(want.L&&!state.L)send('ArrowLeft','keydown'); if(!want.L&&state.L)send('ArrowLeft','keyup');
-          if(want.R&&!state.R)send('ArrowRight','keydown'); if(!want.R&&state.R)send('ArrowRight','keyup');
-          if(want.U&&!state.U)send('ArrowUp','keydown');   if(!want.U&&state.U)send('ArrowUp','keyup');
-          if(want.D&&!state.D)send('ArrowDown','keydown'); if(!want.D&&state.D)send('ArrowDown','keyup');
-          state=want; }
-        function release(){ knob.style.transform='translate(0px,0px)'; ['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].forEach(k=>send(k,'keyup')); state={L:false,R:false,U:false,D:false}; }
-        joy.addEventListener('touchstart',e=>{const t=e.changedTouches[0];move(t.clientX,t.clientY)},{passive:true});
-        joy.addEventListener('touchmove', e=>{const t=e.changedTouches[0];move(t.clientX,t.clientY)},{passive:true});
-        joy.addEventListener('touchend',  release,{passive:true});
-        joy.addEventListener('touchcancel',release,{passive:true});
-        addEventListener('resize', release);
-      })();
-    }
-
+    // Spúšťame hru až po zapísaní nicku (skrýva overlay a sprístupní audio)
     function start(){
       const v = inp.value.trim(); if(!v){alert('Please enter your nickname'); return;}
       localStorage.setItem('rr_nickname', v);
       nick.style.display = 'none';
-      boot();
+      // nič nemusíme injektovať – main.js už beží a vytvorí hru (isIntro=true)
+      fitCanvas();
     }
     go.addEventListener('click', start);
     inp.addEventListener('keydown', e=>{ if(e.key==='Enter') start(); });
 
-    addEventListener('load', ()=>{
+    // Autostart, ak už je nick uložený
+    addEventListener('DOMContentLoaded', ()=>{
       const v = localStorage.getItem('rr_nickname');
-      if(v){ nick.style.display='none'; boot(); }
+      if(v){ nick.style.display='none'; }
     });
+    addEventListener('load', fitCanvas);
+    addEventListener('resize', fitCanvas);
+
+    /* Joystick – citlivejší prah, väčší polomer, touch z celej plochy */
+    (function(){
+      const touchLandscape = matchMedia('(pointer:coarse)').matches && matchMedia('(orientation:landscape)').matches;
+      if(!touchLandscape) return;
+      let state={L:false,R:false,U:false,D:false};
+      const TH=0.20;
+      const send=(key,type)=>{ const m={ArrowLeft:37,ArrowUp:38,ArrowRight:39,ArrowDown:40};
+        window.dispatchEvent(new KeyboardEvent(type,{key,code:key,keyCode:m[key],which:m[key],bubbles:true})); };
+      function center(){ const r=joy.getBoundingClientRect(); return {x:r.left+r.width/2,y:r.top+r.height/2,rad:Math.min(r.width,r.height)*0.48}; }
+      function move(x,y){ const c=center(); let dx=x-c.x,dy=y-c.y; const L=Math.hypot(dx,dy)||1,R=c.rad; if(L>R){dx=dx/L*R;dy=dy/L*R}
+        knob.style.transform=`translate(${dx}px,${dy}px)`; const nx=dx/R, ny=dy/R;
+        const want={L:nx<-TH,R:nx>TH,U:ny<-TH,D:ny>TH};
+        if(want.L&&!state.L)send('ArrowLeft','keydown'); if(!want.L&&state.L)send('ArrowLeft','keyup');
+        if(want.R&&!state.R)send('ArrowRight','keydown'); if(!want.R&&state.R)send('ArrowRight','keyup');
+        if(want.U&&!state.U)send('ArrowUp','keydown');   if(!want.U&&state.U)send('ArrowUp','keyup');
+        if(want.D&&!state.D)send('ArrowDown','keydown'); if(!want.D&&state.D)send('ArrowDown','keyup');
+        state=want; }
+      function release(){ knob.style.transform='translate(0px,0px)'; ['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].forEach(k=>send(k,'keyup')); state={L:false,R:false,U:false,D:false}; }
+      joy.addEventListener('touchstart',e=>{const t=e.changedTouches[0];move(t.clientX,t.clientY)},{passive:true});
+      joy.addEventListener('touchmove', e=>{const t=e.changedTouches[0];move(t.clientX,t.clientY)},{passive:true});
+      joy.addEventListener('touchend',  release,{passive:true});
+      joy.addEventListener('touchcancel',release,{passive:true});
+      addEventListener('resize', release);
+    })();
   </script>
 </body>
 </html>
