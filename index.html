@@ -7,17 +7,17 @@
   <!-- Viewport + safe-area (iOS) -->
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover" />
 
-  <!-- PWA (odporúčané: ak pridáš na plochu, spustí sa bez adresného riadku) -->
+  <!-- PWA (voliteľné; ak pridáš manifest + ikony, získaš app-like fullscreen bez lišty) -->
   <meta name="theme-color" content="#000000"/>
   <link rel="manifest" href="app.webmanifest">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <link rel="apple-touch-icon" href="assets/icon-192.png">
 
   <style>
     html,body{margin:0;height:100%;overflow:hidden;background:#000;font-family:Arial,Helvetica,sans-serif}
+    body{height:100dvh;width:100vw;position:fixed;inset:0}
 
-    /* Portrét blok (iba touch) – stále landscape */
+    /* Portrait blok (iba touch) – stále landscape */
     #rotate-block{
       position:fixed; inset:0; display:none; align-items:center; justify-content:center;
       background:#000; color:#fff; z-index:9999; text-align:center; padding:24px
@@ -28,8 +28,7 @@
 
     /* Kontajner pre hru – Phaser canvas bude centrovaný a škálovaný len cez CSS */
     #game-container{position:fixed; inset:0; z-index:1}
-
-    /* Phaser canvas – 900×600 (logicky), CSS ho len prispôsobí (letterbox 3:2) */
+    /* Canvas (Phaser je 900×600 logicky), CSS ho len prispôsobí (letterbox 3:2) */
     #game-container canvas{ position:absolute; image-rendering:auto; }
 
     /* Nickname modal */
@@ -48,14 +47,16 @@
     #joy-base{ position:absolute; inset:0; border-radius:50%; background:rgba(255,255,255,.10); border:2px solid rgba(255,255,255,.30) }
     #joy-stick{ position:absolute; width:var(--knob); height:var(--knob); left:calc(50% - var(--knob)/2); top:calc(50% - var(--knob)/2); border-radius:50%; background:rgba(255,255,255,.85); box-shadow:0 0 14px rgba(0,0,0,.5); will-change:transform; transition:transform .02s linear }
     @media (pointer:coarse) and (orientation:landscape){ #joy{display:block} }
-
-    /* 100dvh opravuje iOS toolbar výšku v landscape */
-    .use-100dvh{ height:100dvh; width:100vw; position:fixed; inset:0; }
   </style>
 </head>
-<body class="use-100dvh">
-  <div id="rotate-block"><div class="card"><h3>Rotate your device</h3><p>Playable only in <b>landscape</b>.</p></div></div>
+<body>
+  <!-- Blokovanie portrétu -->
+  <div id="rotate-block"><div class="card">
+    <h3>Rotate your device</h3>
+    <p>Playable only in <b>landscape</b>.</p>
+  </div></div>
 
+  <!-- Nickname + štart -->
   <div id="nick">
     <h2>🌊 Rescue Riders</h2>
     <p>Enter your nickname to begin:</p>
@@ -64,6 +65,7 @@
     <p style="opacity:.8;font-size:12px;margin-top:10px;">Tip: Add to Home Screen for full app-like view.</p>
   </div>
 
+  <!-- Hra -->
   <div id="game-container">
     <div id="joy"><div id="joy-base"></div><div id="joy-stick"></div></div>
   </div>
@@ -94,7 +96,7 @@
       joy.style.top  = ((WH - h)/2 + h - joyH - pad) + 'px';
     }
 
-    // Fullscreen + orientation lock (Android podporuje; iOS vyžaduje PWA)
+    // Fullscreen + orientation lock (Android podporí; iOS vyžaduje PWA)
     async function enterFullscreenAndLock(){
       try{
         const el = document.documentElement;
@@ -103,36 +105,41 @@
       try{
         if (screen.orientation && screen.orientation.lock) await screen.orientation.lock('landscape');
       }catch(e){}
-      // iOS toolbar hack – drobný scroll
+      // iOS toolbar jemný posun
       setTimeout(()=>{ try{ scrollTo(0,1); }catch(e){} }, 50);
     }
 
-    // Mini audio warmup (HTMLAudio) – niekedy pomôže Safari
+    // Mini audio warmup (Safari)
     function warmupHtmlAudio(){
       try{
         const a = new Audio();
-        a.src = 'data:audio/mp3;base64,//uQZAAAAAAAAAAAAAAAAAAAA...'; // prázdny/krátky tichý frame (nevadí, ak zlyhá)
-        a.muted = true; a.play().then(()=>a.pause()).catch(()=>{});
+        a.muted = true;
+        a.play().then(()=>a.pause()).catch(()=>{});
       }catch(e){}
     }
 
     function start(){
       const v = inp.value.trim(); if(!v){alert('Please enter your nickname'); return;}
       localStorage.setItem('rr_nickname', v);
-      // 1) Fullscreen + lock (skryje adresný riadok v podporovaných prehliadačoch)
+
+      // Fullscreen + lock + audio warmup
       enterFullscreenAndLock();
-      // 2) Audio warmup (pomáha iOS)
       warmupHtmlAudio();
-      // 3) Skry dialóg a prispôsob plátno
+
+      // skry dialóg a prispôsob plátno
       nick.style.display = 'none';
       fitCanvas();
 
-      // 4) Vyvolaj globálny "user-gesture" event pre Phaser audio (pre istotu)
+      // Globálny gesture event pre odomknutie zvuku v main.js
       try{ document.dispatchEvent(new Event('rr-user-gesture')); }catch(e){}
     }
+
     go.addEventListener('click', start);
     inp.addEventListener('keydown', e=>{ if(e.key==='Enter') start(); });
 
+    addEventListener('DOMContentLoaded', ()=>{
+      // ak už je nick v localStorage, necháme užívateľa rovno tlačiť Start (neštartujeme hru bez gesta, kvôli zvuku)
+    });
     addEventListener('load', fitCanvas);
     addEventListener('resize', fitCanvas);
 
