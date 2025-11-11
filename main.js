@@ -42,11 +42,9 @@ function ensureAudio(scene){
     document.removeEventListener('keydown', onDoc);
   };
   const onDoc = ()=>resume();
-  // dokumentové gestá (klik na „Start“ mimo canvasu)
   document.addEventListener('rr-user-gesture', onDoc, { once:true });
   document.addEventListener('pointerdown', onDoc, { once:true });
   document.addEventListener('keydown', onDoc, { once:true });
-  // záložné gesto priamo v scéne
   scene.input.once('pointerdown', resume);
   scene.input.keyboard.once('keydown', resume);
 }
@@ -78,14 +76,19 @@ function init(d){ this.currentMission = d?.currentMission ?? 0; this.isIntro = d
 
 function preload(){
   this.load.image('hero','assets/hero_screen.png');
-  ['jetski_m','jetski_m_left','jetski_m_up','jetski_m_down',
-   'jetski_f','jetski_f_left','jetski_f_up','jetski_f_down',
-   'swimmer_m','swimmer_f','crook','crook_left','splash',
-   'shark','shark_right','fail'
+  [
+    'jetski_m','jetski_m_left','jetski_m_up','jetski_m_down',
+    'jetski_f','jetski_f_left','jetski_f_up','jetski_f_down',
+    'swimmer_m','swimmer_f','crook','crook_left','splash',
+    'shark','shark_right','fail'
   ].forEach(k=>this.load.image(k,`assets/${k}.png`));
-  for(let i=1;i<=5;i++){ this.load.image(`bg${i}`,`assets/bg${i}.png`); this.load.image(`reward${i}`,`assets/reward${i}.png`); }
-  ['intro_theme','mission_theme','reward_theme','fail_theme','game_complete',
-   'jetski_loop','swimmer_spawn','crook_spawn','shark_spawn'
+  for(let i=1;i<=5;i++){
+    this.load.image(`bg${i}`,`assets/bg${i}.png`);
+    this.load.image(`reward${i}`,`assets/reward${i}.png`);
+  }
+  [
+    'intro_theme','mission_theme','reward_theme','fail_theme','game_complete',
+    'jetski_loop','swimmer_spawn','crook_spawn','shark_spawn'
   ].forEach(a=>{
     const ext = a.includes('spawn') ? 'wav' : 'mp3';
     this.load.audio(a, `assets/audio/${a}.${ext}`);
@@ -93,10 +96,8 @@ function preload(){
 }
 
 function create(){
-  // Registruj robustné odomknutie zvuku pre túto scénu
   ensureAudio(this);
 
-  // klávesy
   this.keys = this.input.keyboard.addKeys({
     space:Phaser.Input.Keyboard.KeyCodes.SPACE,
     enter:Phaser.Input.Keyboard.KeyCodes.ENTER,
@@ -202,15 +203,112 @@ function update(){
 }
 
 /* ---------- Gameplay utils ---------- */
-function showSplash(x,y){ const s=this.add.image(x,y,'splash').setScale(0.7); this.tweens.add({targets:s,alpha:0,duration:500,onComplete:()=>s.destroy()}); }
-function popupScore(scene,x,y,text){ const t=scene.add.text(x,y,text,{fontSize:'18px',color:'#ffff66',fontStyle:'bold',stroke:'#000',strokeThickness:3}).setDepth(999); scene.tweens.add({targets:t,y:y-30,alpha:0,duration:700,onComplete:()=>t.destroy()}); }
+function showSplash(x,y){
+  const s=this.add.image(x,y,'splash').setScale(0.7);
+  this.tweens.add({targets:s,alpha:0,duration:500,onComplete:()=>s.destroy()});
+}
+function popupScore(scene,x,y,text){
+  const t=scene.add.text(x,y,text,{fontSize:'18px',color:'#ffff66',fontStyle:'bold',stroke:'#000',strokeThickness:3}).setDepth(999);
+  scene.tweens.add({targets:t,y:y-30,alpha:0,duration:700,onComplete:()=>t.destroy()});
+}
 
 /* ---------- Spawns & collisions ---------- */
 function rescueSwimmer(player,swimmer){
-  swimmer.destroy(); this.score+=10; this.rescued++; this.scoreLabel.setText(`💯 SCORE ${this.score}`);
-  this.sound.play('swimmer_spawn',{volume:0.6}); showSplash.call(this,swimmer.x,swimmer.y); popupScore(this,swimmer.x,swimmer.y,'+10');
+  swimmer.destroy();
+  this.score+=10; this.rescued++;
+  this.scoreLabel.setText(`💯 SCORE ${this.score}`);
+  this.sound.play('swimmer_spawn',{volume:0.6});
+  showSplash.call(this,swimmer.x,swimmer.y);
+  popupScore(this,swimmer.x,swimmer.y,'+10');
   checkMission.call(this);
 }
 function catchCrook(player,crook){
-  crook.destroy(); this.score+=30; this.caught++; this.scoreLabel.setText(`💯 SCORE ${this.score}`);
-  this.sound.play('crook_spawn',{volume:0.6}); showSplash.call(this,crook.x,crook.y); popupScore(this,cr
+  crook.destroy();
+  this.score+=30; this.caught++;
+  this.scoreLabel.setText(`💯 SCORE ${this.score}`);
+  this.sound.play('crook_spawn',{volume:0.6});
+  showSplash.call(this,crook.x,crook.y);
+  popupScore(this,crook.x,crook.y,'+30');
+  checkMission.call(this);
+}
+function spawnSwimmer(){
+  const x=Phaser.Math.Between(50,GAME_WIDTH-50), y=Phaser.Math.Between(50,GAME_HEIGHT-50);
+  const t=Math.random()>0.5?'swimmer_m':'swimmer_f';
+  const s=this.swimmers.create(x,y,t);
+  s.setVelocity(Phaser.Math.Between(-60,60),Phaser.Math.Between(-40,40)).setBounce(1,1).setSize(70,70);
+}
+function spawnCrook(){
+  const side=Phaser.Math.Between(0,1), y=Phaser.Math.Between(80,GAME_HEIGHT-80);
+  let x,v,tx;
+  if(side){ x=-50; v=Phaser.Math.Between(80,150); tx='crook'; }
+  else { x=GAME_WIDTH+50; v=Phaser.Math.Between(-150,-80); tx='crook_left'; }
+  const c=this.crooks.create(x,y,tx);
+  c.setVelocity(v,0).setImmovable(true).setSize(90,90);
+}
+function spawnShark(direction='right'){
+  const y=Phaser.Math.Between(100,GAME_HEIGHT-100);
+  let x,v,tx;
+  if(direction==='right'){ x=GAME_WIDTH+120; v=Phaser.Math.Between(-250,-200); tx='shark'; }
+  else { x=-120; v=Phaser.Math.Between(200,250); tx='shark_right'; }
+  const shark=this.sharks.create(x,y,tx);
+  shark.setVelocity(v,0).setImmovable(true).setSize(100,60);
+  this.sound.play('shark_spawn',{volume:0.8});
+  this.tweens.add({targets:shark,y:shark.y+Phaser.Math.Between(-15,15),duration:Phaser.Math.Between(1500,2000),ease:'Sine.easeInOut',yoyo:true,repeat:-1});
+}
+function hitShark(player,shark){
+  shark.destroy();
+  this.score=Math.max(0,this.score-30);
+  this.scoreLabel.setText(`💯 SCORE ${this.score}`);
+  const flash=this.add.rectangle(GAME_WIDTH/2,GAME_HEIGHT/2,GAME_WIDTH,GAME_HEIGHT,0xff0000,0.3).setDepth(999);
+  this.tweens.add({targets:flash,alpha:0,duration:400,onComplete:()=>flash.destroy()});
+  showSplash.call(this,player.x,player.y);
+  popupScore(this,player.x,player.y,'-30');
+}
+
+/* ---------- Win / Fail ---------- */
+function checkMission(){
+  const m=MISSIONS[this.currentMission];
+  this.goalLabel.setText(`🎯 Rescue ${m.rescued} (${this.rescued||0}/${m.rescued}) + Catch ${m.caught} (${this.caught||0}/${m.caught})`);
+  if((this.rescued||0)>=m.rescued && (this.caught||0)>=m.caught) missionComplete.call(this);
+}
+function missionComplete(){
+  if(this.timerEvent) this.timerEvent.remove();
+  this.physics.pause();
+  this.sound.stopAll();
+  playLoop(this,'reward_theme',{loop:true,volume:0.7});
+  showFullscreenImageFit(this,`reward${this.currentMission+1}`).setDepth(999);
+
+  const next=()=>this.scene.restart({currentMission:this.currentMission+1,isIntro:false});
+  if(this.currentMission<MISSIONS.length-1){
+    const t=this.add.text(GAME_WIDTH/2,GAME_HEIGHT-60,'Press SPACE / ENTER / CLICK for next mission',
+      {fontSize:'26px',color:'#fff',backgroundColor:'#000'}).setOrigin(0.5).setDepth(1000);
+    this.tweens.add({targets:t,alpha:0.2,yoyo:true,repeat:-1,duration:800});
+    this.input.keyboard.once('keydown-SPACE',next);
+    this.input.keyboard.once('keydown-ENTER',next);
+    this.input.once('pointerdown',next);
+  } else {
+    this.sound.stopAll();
+    playLoop(this,'game_complete',{loop:true,volume:0.7});
+    this.add.text(GAME_WIDTH/2,GAME_HEIGHT-100,'🏆 Game Complete! 🏆',
+      {fontSize:'32px',color:'#ff0'}).setOrigin(0.5).setDepth(1000);
+    const r=this.add.text(GAME_WIDTH/2,GAME_HEIGHT-60,'Press R to restart the game',
+      {fontSize:'24px',color:'#fff',backgroundColor:'#000'}).setOrigin(0.5).setDepth(1000);
+    this.tweens.add({targets:r,alpha:0.2,yoyo:true,repeat:-1,duration:800});
+    const h=(e)=>{ if(e.key==='r'||e.key==='R'){ document.removeEventListener('keydown',h); hardReset(this);} };
+    document.addEventListener('keydown',h);
+  }
+}
+function failMission(){
+  if(this.timerEvent) this.timerEvent.remove();
+  this.physics.pause();
+  this.sound.stopAll();
+  playLoop(this,'fail_theme',{loop:true,volume:0.7});
+  showFullscreenImageFit(this,'fail').setDepth(999);
+  const retry=()=>this.scene.restart({currentMission:this.currentMission,isIntro:false});
+  const t=this.add.text(GAME_WIDTH/2,GAME_HEIGHT-60,'Press SPACE / ENTER / CLICK to retry',
+    {fontSize:'26px',color:'#fff',backgroundColor:'#000'}).setOrigin(0.5).setDepth(1000);
+  this.tweens.add({targets:t,alpha:0.2,yoyo:true,repeat:-1,duration:800});
+  this.input.keyboard.once('keydown-SPACE',retry);
+  this.input.keyboard.once('keydown-ENTER',retry);
+  this.input.once('pointerdown',retry);
+}
