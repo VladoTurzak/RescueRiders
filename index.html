@@ -3,21 +3,14 @@
 <head>
   <meta charset="utf-8" />
   <title>Rescue Riders</title>
-
-  <!-- Viewport + safe-area (iOS) -->
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover" />
-
-  <!-- PWA (voliteľné; ak pridáš manifest + ikony, získaš app-like fullscreen bez lišty) -->
   <meta name="theme-color" content="#000000"/>
-  <link rel="manifest" href="app.webmanifest">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-
   <style>
     html,body{margin:0;height:100%;overflow:hidden;background:#000;font-family:Arial,Helvetica,sans-serif}
     body{height:100dvh;width:100vw;position:fixed;inset:0}
 
-    /* Portrait blok (iba touch) – stále landscape */
     #rotate-block{
       position:fixed; inset:0; display:none; align-items:center; justify-content:center;
       background:#000; color:#fff; z-index:9999; text-align:center; padding:24px
@@ -26,12 +19,14 @@
     #rotate-block h3{margin:0 0 8px; font-size:22px}
     @media (pointer:coarse) and (orientation:portrait){ #rotate-block{display:flex} }
 
-    /* Kontajner pre hru – Phaser canvas bude centrovaný a škálovaný len cez CSS */
-    #game-container{position:fixed; inset:0; z-index:1}
-    /* Canvas (Phaser je 900×600 logicky), CSS ho len prispôsobí (letterbox 3:2) */
-    #game-container canvas{ position:absolute; image-rendering:auto; }
+    #bg-cover{
+      position:fixed; inset:0; width:100vw; height:100dvh;
+      object-fit:cover; z-index:0; pointer-events:none; user-select:none; background:#000;
+    }
 
-    /* Nickname modal */
+    #game-container{position:fixed; inset:0; z-index:1}
+    #game-container canvas{position:absolute; image-rendering:auto;}
+
     #nick{
       position:fixed; left:50%; top:50%; transform:translate(-50%,-50%);
       background:rgba(0,0,0,.65); padding:32px 40px; border-radius:14px; color:#fff; text-align:center;
@@ -41,7 +36,6 @@
     #nick input{width:80%; padding:10px; border:none; border-radius:8px; text-align:center; outline:none; background:#fff; color:#000}
     #nick button{margin-top:12px; padding:10px 22px; border:none; border-radius:8px; background:#ffcc00; color:#000; font-weight:700; cursor:pointer}
 
-    /* Joystick – väčší, citlivejší; prilepený k ľavému dolnému rohu CANVASU */
     :root{ --joy:min(26vmin,150px); --knob:calc(var(--joy)*.34) }
     #joy{ position:fixed; width:var(--joy); height:var(--joy); touch-action:none; display:none; z-index:5 }
     #joy-base{ position:absolute; inset:0; border-radius:50%; background:rgba(255,255,255,.10); border:2px solid rgba(255,255,255,.30) }
@@ -50,123 +44,108 @@
   </style>
 </head>
 <body>
-  <!-- Blokovanie portrétu -->
-  <div id="rotate-block"><div class="card">
-    <h3>Rotate your device</h3>
-    <p>Playable only in <b>landscape</b>.</p>
-  </div></div>
+  <div id="rotate-block"><div class="card"><h3>Rotate your device</h3><p>Playable only in <b>landscape</b>.</p></div></div>
 
-  <!-- Nickname + štart -->
+  <img id="bg-cover" alt="background"/>
+
   <div id="nick">
     <h2>🌊 Rescue Riders</h2>
     <p>Enter your nickname to begin:</p>
     <input id="n" maxlength="12" placeholder="Your name" autofocus />
-    <br /><button id="go">Start (Fullscreen + Sound)</button>
-    <p style="opacity:.8;font-size:12px;margin-top:10px;">Tip: Add to Home Screen for full app-like view.</p>
+    <br /><button id="go">Start Game</button>
   </div>
 
-  <!-- Hra -->
-  <div id="game-container">
-    <div id="joy"><div id="joy-base"></div><div id="joy-stick"></div></div>
-  </div>
+  <div id="game-container"><div id="joy"><div id="joy-base"></div><div id="joy-stick"></div></div></div>
 
-  <!-- Phaser pred hrou -->
   <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js" defer></script>
-  <!-- Hra staticky -->
   <script src="main.js" defer></script>
 
   <script>
-    const GC = document.getElementById('game-container');
-    const nick = document.getElementById('nick'), inp = document.getElementById('n'), go = document.getElementById('go');
-    const joy = document.getElementById('joy'), knob = document.getElementById('joy-stick');
+    const GC=document.getElementById('game-container'),
+          nick=document.getElementById('nick'),
+          inp=document.getElementById('n'),
+          go=document.getElementById('go'),
+          joy=document.getElementById('joy'),
+          knob=document.getElementById('joy-stick'),
+          bgCover=document.getElementById('bg-cover');
 
-    /* FIT canvas (len CSS) – udrž 3:2 (900×600) a vycentruj bez orezania */
+    // === Dynamické prispôsobenie canvasu ===
     function fitCanvas(){
       const cv = GC.querySelector('canvas'); if(!cv) return;
       const R = 900/600;
       const WW = innerWidth, WH = innerHeight;
-      let w,h; if(WW/WH > R){ h = WH; w = Math.floor(h*R); } else { w = WW; h = Math.floor(w/R); }
-      cv.style.width = w+'px';  cv.style.height = h+'px';
-      cv.style.left  = ((WW - w)/2)+'px';
-      cv.style.top   = ((WH - h)/2)+'px';
+      let w, h;
+      if(WW/WH < R){
+        // užšie okno → prispôsob výške
+        h = WH;
+        w = Math.floor(h * R);
+      } else {
+        // širšie okno → prispôsob šírke (bez pásov po stranách)
+        w = WW;
+        h = Math.floor(w / R);
+      }
+      cv.style.width = w + 'px';
+      cv.style.height = h + 'px';
+      cv.style.left = ((WW - w)/2) + 'px';
+      cv.style.top  = ((WH - h)/2) + 'px';
 
-      // Joystick do ĽD rohu canvasu
+      // joystick
       const joyH = parseFloat(getComputedStyle(joy).height)||0, pad=16;
       joy.style.left = ((WW - w)/2 + pad) + 'px';
       joy.style.top  = ((WH - h)/2 + h - joyH - pad) + 'px';
+      joy.style.pointerEvents = 'auto';
     }
+    addEventListener('resize', fitCanvas);
+    addEventListener('orientationchange', fitCanvas);
 
-    // Fullscreen + orientation lock (Android podporí; iOS vyžaduje PWA)
-    async function enterFullscreenAndLock(){
-      try{
-        const el = document.documentElement;
-        if (!document.fullscreenElement && el.requestFullscreen) await el.requestFullscreen({navigationUI:'hide'});
-      }catch(e){}
-      try{
-        if (screen.orientation && screen.orientation.lock) await screen.orientation.lock('landscape');
-      }catch(e){}
-      // iOS toolbar jemný posun
-      setTimeout(()=>{ try{ scrollTo(0,1); }catch(e){} }, 50);
-    }
-
-    // Mini audio warmup (Safari)
-    function warmupHtmlAudio(){
-      try{
-        const a = new Audio();
-        a.muted = true;
-        a.play().then(()=>a.pause()).catch(()=>{});
-      }catch(e){}
-    }
-
+    // === Start hry ===
     function start(){
-      const v = inp.value.trim(); if(!v){alert('Please enter your nickname'); return;}
+      const v = inp.value.trim();
+      if(!v){ alert('Please enter your nickname'); return; }
       localStorage.setItem('rr_nickname', v);
-
-      // Fullscreen + lock + audio warmup
-      enterFullscreenAndLock();
-      warmupHtmlAudio();
-
-      // skry dialóg a prispôsob plátno
-      nick.style.display = 'none';
+      nick.style.display='none';
       fitCanvas();
-
-      // Globálny gesture event pre odomknutie zvuku v main.js
       try{ document.dispatchEvent(new Event('rr-user-gesture')); }catch(e){}
     }
-
     go.addEventListener('click', start);
-    inp.addEventListener('keydown', e=>{ if(e.key==='Enter') start(); });
+    inp.addEventListener('keydown', e => { if(e.key==='Enter') start(); });
 
-    addEventListener('DOMContentLoaded', ()=>{
-      // ak už je nick v localStorage, necháme užívateľa rovno tlačiť Start (neštartujeme hru bez gesta, kvôli zvuku)
-    });
-    addEventListener('load', fitCanvas);
-    addEventListener('resize', fitCanvas);
+    // === GESTURE BRIDGE ===
+    (function arm(){
+      let fired=false;
+      const fire=()=>{ if(fired)return; fired=true; try{document.dispatchEvent(new Event('rr-user-gesture'));}catch(e){} };
+      ['pointerdown','touchstart','click','keydown','mousedown'].forEach(ev=>{
+        document.addEventListener(ev,fire,{once:true,passive:true});
+      });
+    })();
 
-    /* Joystick – citlivejší prah, väčší polomer, touch z celej plochy */
+    // === JOYSTICK ===
     (function(){
       const touchLandscape = matchMedia('(pointer:coarse)').matches && matchMedia('(orientation:landscape)').matches;
-      if(!touchLandscape) return;
+      if(!touchLandscape)return;
       let state={L:false,R:false,U:false,D:false};
       const TH=0.20;
-      const send=(key,type)=>{ const m={ArrowLeft:37,ArrowUp:38,ArrowRight:39,ArrowDown:40};
-        window.dispatchEvent(new KeyboardEvent(type,{key,code:key,keyCode:m[key],which:m[key],bubbles:true})); };
-      function center(){ const r=joy.getBoundingClientRect(); return {x:r.left+r.width/2,y:r.top+r.height/2,rad:Math.min(r.width,r.height)*0.48}; }
-      function move(x,y){ const c=center(); let dx=x-c.x,dy=y-c.y; const L=Math.hypot(dx,dy)||1,R=c.rad; if(L>R){dx=dx/L*R;dy=dy/L*R}
-        knob.style.transform=`translate(${dx}px,${dy}px)`; const nx=dx/R, ny=dy/R;
+      const send=(key,type)=>{const m={ArrowLeft:37,ArrowUp:38,ArrowRight:39,ArrowDown:40};
+        window.dispatchEvent(new KeyboardEvent(type,{key,code:key,keyCode:m[key],which:m[key],bubbles:true}));};
+      function center(){const r=joy.getBoundingClientRect();return{x:r.left+r.width/2,y:r.top+r.height/2,rad:Math.min(r.width,r.height)*0.48};}
+      function move(x,y){const c=center();let dx=x-c.x,dy=y-c.y;const L=Math.hypot(dx,dy)||1,R=c.rad;if(L>R){dx=dx/L*R;dy=dy/L*R}
+        knob.style.transform=`translate(${dx}px,${dy}px)`;const nx=dx/R,ny=dy/R;
         const want={L:nx<-TH,R:nx>TH,U:ny<-TH,D:ny>TH};
-        if(want.L&&!state.L)send('ArrowLeft','keydown'); if(!want.L&&state.L)send('ArrowLeft','keyup');
-        if(want.R&&!state.R)send('ArrowRight','keydown'); if(!want.R&&state.R)send('ArrowRight','keyup');
-        if(want.U&&!state.U)send('ArrowUp','keydown');   if(!want.U&&state.U)send('ArrowUp','keyup');
-        if(want.D&&!state.D)send('ArrowDown','keydown'); if(!want.D&&state.D)send('ArrowDown','keyup');
-        state=want; }
-      function release(){ knob.style.transform='translate(0px,0px)'; ['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].forEach(k=>send(k,'keyup')); state={L:false,R:false,U:false,D:false}; }
+        if(want.L&&!state.L)send('ArrowLeft','keydown');if(!want.L&&state.L)send('ArrowLeft','keyup');
+        if(want.R&&!state.R)send('ArrowRight','keydown');if(!want.R&&state.R)send('ArrowRight','keyup');
+        if(want.U&&!state.U)send('ArrowUp','keydown');if(!want.U&&state.U)send('ArrowUp','keyup');
+        if(want.D&&!state.D)send('ArrowDown','keydown');if(!want.D&&state.D)send('ArrowDown','keyup');
+        state=want;}
+      function release(){knob.style.transform='translate(0px,0px)';['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].forEach(k=>send(k,'keyup'));state={L:false,R:false,U:false,D:false};}
       joy.addEventListener('touchstart',e=>{const t=e.changedTouches[0];move(t.clientX,t.clientY)},{passive:true});
-      joy.addEventListener('touchmove', e=>{const t=e.changedTouches[0];move(t.clientX,t.clientY)},{passive:true});
-      joy.addEventListener('touchend',  release,{passive:true});
+      joy.addEventListener('touchmove',e=>{const t=e.changedTouches[0];move(t.clientX,t.clientY)},{passive:true});
+      joy.addEventListener('touchend',release,{passive:true});
       joy.addEventListener('touchcancel',release,{passive:true});
-      addEventListener('resize', release);
+      addEventListener('resize',release);
     })();
+
+    // predvyplň cover, kým hra nenastaví konkrétnu misiu
+    bgCover.src = 'assets/bg1.png';
   </script>
 </body>
 </html>
