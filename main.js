@@ -1,8 +1,5 @@
-// Rescue Riders — pevné 900×600 (3:2), desktop-identické. ŽIADNY runtime resize vo Phaseri.
-// + robustný audio bootstrap (hudba sa spustí po 1. interakcii)
-
+// Rescue Riders — 900×600 (3:2). Silné odomknutie zvuku + fullscreen/gesture hook.
 const GAME_WIDTH = 900, GAME_HEIGHT = 600;
-
 const MainScene = { key:'main', preload, create, update, init };
 
 const config = {
@@ -12,8 +9,7 @@ const config = {
   height: GAME_HEIGHT,
   backgroundColor: 0x000000,
   physics: { default:'arcade', arcade:{ debug:false } },
-  // Dôležité: nezakazuj WebAudio, aby šlo resume/unlock
-  audio: { noAudio: false, disableWebAudio: false },
+  audio: { noAudio:false, disableWebAudio:false },
   scene: [MainScene]
 };
 
@@ -22,38 +18,45 @@ game.scene.start('main', { isIntro:true });
 
 /* ---------- Helpers ---------- */
 function showFullscreenImageFit(scene, key){
-  const W = GAME_WIDTH, H = GAME_HEIGHT;
-  const img = scene.add.image(W/2, H/2, key).setOrigin(0.5);
-  const scale = Math.min(W/img.width, H/img.height);
+  const img = scene.add.image(GAME_WIDTH/2, GAME_HEIGHT/2, key).setOrigin(0.5);
+  const scale = Math.min(GAME_WIDTH/img.width, GAME_HEIGHT/img.height);
   img.setScale(scale);
   return img;
 }
 function showFullscreenImageCover(scene, key){
-  // „cover“ v rámci 900×600 (nie na okno): nič sa nedeformuje, ale zaplní celé pole
-  const W = GAME_WIDTH, H = GAME_HEIGHT;
-  const img = scene.add.image(W/2, H/2, key).setOrigin(0.5);
-  const scale = Math.max(W/img.width, H/img.height);
+  const img = scene.add.image(GAME_WIDTH/2, GAME_HEIGHT/2, key).setOrigin(0.5);
+  const scale = Math.max(GAME_WIDTH/img.width, GAME_HEIGHT/img.height);
   img.setScale(scale).setDepth(-100);
   return img;
 }
 
-// ✔ Audio bootstrap: spoľahlivo spustí zvuk po 1. interakcii (tap/klik/klávesa)
-function playAfterUserGesture(scene, key, cfg){
-  const start = () => { try{ scene.sound.play(key, cfg); }catch(e){} };
-  const resumeAndPlay = () => {
-    try { scene.sound.unlock(); } catch(e){}
-    try { if (scene.sound.context && scene.sound.context.state !== 'running') scene.sound.context.resume(); } catch(e){}
-    start();
+// ===== Audio bootstrap (počúva gesture na scene aj na document) =====
+function ensureAudio(scene){
+  if (ensureAudio._done) return;
+  const resume = () => {
+    try{ scene.sound.unlock(); }catch(e){}
+    try{ const ctx = scene.sound.context; if(ctx && ctx.state!=='running'){ ctx.resume(); } }catch(e){}
+    ensureAudio._done = true;
+    document.removeEventListener('rr-user-gesture', onDoc);
+    document.removeEventListener('pointerdown', onDoc);
+    document.removeEventListener('keydown', onDoc);
   };
-  // Ak už je audio povolené, hraj hneď
-  if (!scene.sound.locked && scene.sound.context && scene.sound.context.state === 'running') {
-    start();
-    return;
-  }
-  // Inak čakaj na prvú interakciu používateľa
-  const once = ()=>{ scene.input.off('pointerdown', once); scene.input.keyboard.off('keydown', once); resumeAndPlay(); };
-  scene.input.once('pointerdown', once);
-  scene.input.keyboard.once('keydown', once);
+  const onDoc = ()=>resume();
+  // dokumentové gestá (klik na „Start“ mimo canvasu)
+  document.addEventListener('rr-user-gesture', onDoc, { once:true });
+  document.addEventListener('pointerdown', onDoc, { once:true });
+  document.addEventListener('keydown', onDoc, { once:true });
+  // záložné gesto priamo v scéne
+  scene.input.once('pointerdown', resume);
+  scene.input.keyboard.once('keydown', resume);
+}
+
+function playLoop(scene, key, cfg){
+  ensureAudio(scene);
+  const start = ()=>{ try{ scene.sound.play(key, cfg); }catch(e){} };
+  if (!scene.sound.locked && scene.sound.context && scene.sound.context.state==='running'){ start(); return; }
+  const fire=()=>{ start(); document.removeEventListener('rr-user-gesture', fire); };
+  document.addEventListener('rr-user-gesture', fire, { once:true });
 }
 
 function hardReset(sceneCtx){
@@ -80,12 +83,7 @@ function preload(){
    'swimmer_m','swimmer_f','crook','crook_left','splash',
    'shark','shark_right','fail'
   ].forEach(k=>this.load.image(k,`assets/${k}.png`));
-
-  for(let i=1;i<=5;i++){
-    this.load.image(`bg${i}`,`assets/bg${i}.png`);
-    this.load.image(`reward${i}`,`assets/reward${i}.png`);
-  }
-
+  for(let i=1;i<=5;i++){ this.load.image(`bg${i}`,`assets/bg${i}.png`); this.load.image(`reward${i}`,`assets/reward${i}.png`); }
   ['intro_theme','mission_theme','reward_theme','fail_theme','game_complete',
    'jetski_loop','swimmer_spawn','crook_spawn','shark_spawn'
   ].forEach(a=>{
@@ -95,7 +93,9 @@ function preload(){
 }
 
 function create(){
-  // Nepokúšaj sa prehrávať hneď – nechaj to na playAfterUserGesture
+  // Registruj robustné odomknutie zvuku pre túto scénu
+  ensureAudio(this);
+
   // klávesy
   this.keys = this.input.keyboard.addKeys({
     space:Phaser.Input.Keyboard.KeyCodes.SPACE,
@@ -113,7 +113,7 @@ function create(){
     this.tweens.add({targets:press,alpha:0.2,yoyo:true,repeat:-1,duration:800});
 
     this.sound.stopAll();
-    playAfterUserGesture(this,'intro_theme',{loop:true,volume:0.7});
+    playLoop(this,'intro_theme',{loop:true,volume:0.7});
 
     const start=()=>this.scene.restart({currentMission:0,isIntro:false});
     this.input.keyboard.once('keydown-SPACE',start);
@@ -124,38 +124,27 @@ function create(){
 
   // ----- Mission -----
   this.sound.stopAll();
-  playAfterUserGesture(this,'mission_theme',{loop:true,volume:0.7});
+  playLoop(this,'mission_theme',{loop:true,volume:0.7});
 
-  // Loop motora spustíme tiež až po geste (inak ostane ticho na iOS)
   this.jetskiSound = this.sound.add('jetski_loop',{loop:true,volume:0});
-  const startJet = ()=>{
-    try{ this.jetskiSound.play(); }catch(e){}
-  };
-  if (!this.sound.locked && this.sound.context && this.sound.context.state === 'running'){
-    startJet();
-  } else {
-    const once = ()=>{ this.input.off('pointerdown', once); this.input.keyboard.off('keydown', once);
-      try{ this.sound.unlock(); if(this.sound.context.state!=='running') this.sound.context.resume(); }catch(e){}
-      startJet();
-    };
-    this.input.once('pointerdown', once);
-    this.input.keyboard.once('keydown', once);
-  }
+  const startJet = ()=>{ try{ this.jetskiSound.play(); }catch(e){} };
+  if (!this.sound.locked && this.sound.context && this.sound.context.state==='running') startJet();
+  else document.addEventListener('rr-user-gesture', ()=>startJet(), { once:true });
 
-  // pozadie misie – cover v rámci 900×600 (bez deformácie UI)
+  // Pozadie (cover v 900×600)
   const bgKey = `bg${this.currentMission+1}`;
   if (this.textures.exists(bgKey)) showFullscreenImageCover(this, bgKey);
 
-  // hráč
+  // Hráč
   this.isFemale = Math.random()>0.5;
   const tex = this.isFemale ? 'jetski_f' : 'jetski_m';
   this.player = this.physics.add.sprite(GAME_WIDTH/2, GAME_HEIGHT/2, tex)
                   .setCollideWorldBounds(false).setSize(100,100);
 
-  // vstupy
+  // Vstupy
   this.cursors = this.input.keyboard.createCursorKeys();
 
-  // groups & spawns
+  // Spawny
   const m = MISSIONS[this.currentMission];
   this.swimmers = this.physics.add.group();
   this.crooks   = this.physics.add.group();
@@ -171,7 +160,7 @@ function create(){
   this.physics.add.overlap(this.player, this.swimmers, rescueSwimmer, null, this);
   this.physics.add.collider(this.player, this.crooks,  catchCrook,   null, this);
 
-  // UI – pevné súradnice v 900×600 (vždy viditeľné)
+  // UI
   const txt={fontSize:'22px',color:'#fff',fontStyle:'bold',fontFamily:'Arial',shadow:{offsetX:1,offsetY:1,color:'#000',blur:3}};
   this.missionLabel = this.add.text(30, 22, `⭐ MISSION ${this.currentMission+1}`, txt);
   this.scoreLabel   = this.add.text(GAME_WIDTH/2-60, 22, `💯 SCORE 0`, txt);
@@ -196,22 +185,17 @@ function create(){
 
 function update(){
   if(!this.player||!this.cursors) return;
-
   const moving = this.cursors.left.isDown||this.cursors.right.isDown||this.cursors.up.isDown||this.cursors.down.isDown;
   if (this.jetskiSound){
     const target = moving ? 0.55 : 0.0;
     this.jetskiSound.volume += (target - this.jetskiSound.volume)*0.08;
   }
-
   let vx=0, vy=0;
   if(this.cursors.left.isDown){ vx-=250; this.player.setTexture(this.isFemale?'jetski_f_left':'jetski_m_left'); }
   else if(this.cursors.right.isDown){ vx+=250; this.player.setTexture(this.isFemale?'jetski_f':'jetski_m'); }
   if(this.cursors.up.isDown){ vy-=250; this.player.setTexture(this.isFemale?'jetski_f_up':'jetski_m_up'); }
   else if(this.cursors.down.isDown){ vy+=250; this.player.setTexture(this.isFemale?'jetski_f_down':'jetski_m_down'); }
-
   this.player.setVelocity(vx,vy);
-
-  // clamp do 900×600 → nikdy nevylezie mimo zorné pole
   const hw=this.player.displayWidth/2, hh=this.player.displayHeight/2;
   this.player.x = Phaser.Math.Clamp(this.player.x, hw, GAME_WIDTH - hw);
   this.player.y = Phaser.Math.Clamp(this.player.y, hh, GAME_HEIGHT - hh);
@@ -229,81 +213,4 @@ function rescueSwimmer(player,swimmer){
 }
 function catchCrook(player,crook){
   crook.destroy(); this.score+=30; this.caught++; this.scoreLabel.setText(`💯 SCORE ${this.score}`);
-  this.sound.play('crook_spawn',{volume:0.6}); showSplash.call(this,crook.x,crook.y); popupScore(this,crook.x,crook.y,'+30');
-  checkMission.call(this);
-}
-function spawnSwimmer(){
-  const x=Phaser.Math.Between(50,GAME_WIDTH-50), y=Phaser.Math.Between(50,GAME_HEIGHT-50);
-  const t=Math.random()>0.5?'swimmer_m':'swimmer_f';
-  const s=this.swimmers.create(x,y,t);
-  s.setVelocity(Phaser.Math.Between(-60,60),Phaser.Math.Between(-40,40)).setBounce(1,1).setSize(70,70);
-}
-function spawnCrook(){
-  const side=Phaser.Math.Between(0,1), y=Phaser.Math.Between(80,GAME_HEIGHT-80);
-  let x,v,tx; if(side){ x=-50; v=Phaser.Math.Between(80,150); tx='crook'; } else { x=GAME_WIDTH+50; v=Phaser.Math.Between(-150,-80); tx='crook_left'; }
-  const c=this.crooks.create(x,y,tx);
-  c.setVelocity(v,0).setImmovable(true).setSize(90,90);
-}
-function spawnShark(direction='right'){
-  const y=Phaser.Math.Between(100,GAME_HEIGHT-100); let x,v,tx;
-  if(direction==='right'){ x=GAME_WIDTH+120; v=Phaser.Math.Between(-250,-200); tx='shark'; }
-  else { x=-120; v=Phaser.Math.Between(200,250); tx='shark_right'; }
-  const shark=this.sharks.create(x,y,tx);
-  shark.setVelocity(v,0).setImmovable(true).setSize(100,60);
-  this.sound.play('shark_spawn',{volume:0.8});
-  this.tweens.add({targets:shark,y:shark.y+Phaser.Math.Between(-15,15),duration:Phaser.Math.Between(1500,2000),ease:'Sine.easeInOut',yoyo:true,repeat:-1});
-}
-function hitShark(player,shark){
-  shark.destroy(); this.score=Math.max(0,this.score-30); this.scoreLabel.setText(`💯 SCORE ${this.score}`);
-  const flash=this.add.rectangle(GAME_WIDTH/2,GAME_HEIGHT/2,GAME_WIDTH,GAME_HEIGHT,0xff0000,0.3).setDepth(999);
-  this.tweens.add({targets:flash,alpha:0,duration:400,onComplete:()=>flash.destroy()});
-  showSplash.call(this,player.x,player.y); popupScore(this,player.x,player.y,'-30');
-}
-
-/* ---------- Win / Fail ---------- */
-function checkMission(){
-  const m=MISSIONS[this.currentMission];
-  this.goalLabel.setText(`🎯 Rescue ${m.rescued} (${this.rescued||0}/${m.rescued}) + Catch ${m.caught} (${this.caught||0}/${m.caught})`);
-  if((this.rescued||0)>=m.rescued && (this.caught||0)>=m.caught) missionComplete.call(this);
-}
-function missionComplete(){
-  if(this.timerEvent) this.timerEvent.remove();
-  this.physics.pause();
-  this.sound.stopAll();
-  playAfterUserGesture(this,'reward_theme',{loop:true,volume:0.7}); // istota aj pri prechode scén
-  showFullscreenImageFit(this,`reward${this.currentMission+1}`).setDepth(999);
-
-  const next=()=>this.scene.restart({currentMission:this.currentMission+1,isIntro:false});
-  if(this.currentMission<MISSIONS.length-1){
-    const t=this.add.text(GAME_WIDTH/2,GAME_HEIGHT-60,'Press SPACE / ENTER / CLICK for next mission',
-      {fontSize:'26px',color:'#fff',backgroundColor:'#000'}).setOrigin(0.5).setDepth(1000);
-    this.tweens.add({targets:t,alpha:0.2,yoyo:true,repeat:-1,duration:800});
-    this.input.keyboard.once('keydown-SPACE',next);
-    this.input.keyboard.once('keydown-ENTER',next);
-    this.input.once('pointerdown',next);
-  } else {
-    this.sound.stopAll();
-    playAfterUserGesture(this,'game_complete',{loop:true,volume:0.7});
-    this.add.text(GAME_WIDTH/2,GAME_HEIGHT-100,'🏆 Game Complete! 🏆',
-      {fontSize:'32px',color:'#ff0'}).setOrigin(0.5).setDepth(1000);
-    const r=this.add.text(GAME_WIDTH/2,GAME_HEIGHT-60,'Press R to restart the game',
-      {fontSize:'24px',color:'#fff',backgroundColor:'#000'}).setOrigin(0.5).setDepth(1000);
-    this.tweens.add({targets:r,alpha:0.2,yoyo:true,repeat:-1,duration:800});
-    const h=(e)=>{ if(e.key==='r'||e.key==='R'){ document.removeEventListener('keydown',h); hardReset(this);} };
-    document.addEventListener('keydown',h);
-  }
-}
-function failMission(){
-  if(this.timerEvent) this.timerEvent.remove();
-  this.physics.pause();
-  this.sound.stopAll();
-  playAfterUserGesture(this,'fail_theme',{loop:true,volume:0.7});
-  showFullscreenImageFit(this,'fail').setDepth(999);
-  const retry=()=>this.scene.restart({currentMission:this.currentMission,isIntro:false});
-  const t=this.add.text(GAME_WIDTH/2,GAME_HEIGHT-60,'Press SPACE / ENTER / CLICK to retry',
-    {fontSize:'26px',color:'#fff',backgroundColor:'#000'}).setOrigin(0.5).setDepth(1000);
-  this.tweens.add({targets:t,alpha:0.2,yoyo:true,repeat:-1,duration:800});
-  this.input.keyboard.once('keydown-SPACE',retry);
-  this.input.keyboard.once('keydown-ENTER',retry);
-  this.input.once('pointerdown',retry);
-}
+  this.sound.play('crook_spawn',{volume:0.6}); showSplash.call(this,crook.x,crook.y); popupScore(this,cr
