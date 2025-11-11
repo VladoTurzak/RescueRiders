@@ -69,27 +69,28 @@
           knob=document.getElementById('joy-stick'),
           bgCover=document.getElementById('bg-cover');
 
-    // === Dynamické prispôsobenie canvasu ===
+    // === Canvas fit: herné pole 3:2 (contain), pozadie cover ===
     function fitCanvas(){
       const cv = GC.querySelector('canvas'); if(!cv) return;
       const R = 900/600;
       const WW = innerWidth, WH = innerHeight;
       let w, h;
-      if(WW/WH < R){
-        // užšie okno → prispôsob výške
+      if (WW/WH > R) {
+        // okno je širšie → fit podľa výšky
         h = WH;
         w = Math.floor(h * R);
       } else {
-        // širšie okno → prispôsob šírke (bez pásov po stranách)
+        // okno je užšie → fit podľa šírky
         w = WW;
         h = Math.floor(w / R);
       }
+
       cv.style.width = w + 'px';
       cv.style.height = h + 'px';
       cv.style.left = ((WW - w)/2) + 'px';
       cv.style.top  = ((WH - h)/2) + 'px';
 
-      // joystick
+      // joystick umiestnený vľavo dole
       const joyH = parseFloat(getComputedStyle(joy).height)||0, pad=16;
       joy.style.left = ((WW - w)/2 + pad) + 'px';
       joy.style.top  = ((WH - h)/2 + h - joyH - pad) + 'px';
@@ -98,7 +99,7 @@
     addEventListener('resize', fitCanvas);
     addEventListener('orientationchange', fitCanvas);
 
-    // === Start hry ===
+    // === Spustenie hry ===
     function start(){
       const v = inp.value.trim();
       if(!v){ alert('Please enter your nickname'); return; }
@@ -110,7 +111,7 @@
     go.addEventListener('click', start);
     inp.addEventListener('keydown', e => { if(e.key==='Enter') start(); });
 
-    // === GESTURE BRIDGE ===
+    // === Gesture bridge pre odomknutie zvuku ===
     (function arm(){
       let fired=false;
       const fire=()=>{ if(fired)return; fired=true; try{document.dispatchEvent(new Event('rr-user-gesture'));}catch(e){} };
@@ -119,7 +120,7 @@
       });
     })();
 
-    // === JOYSTICK ===
+    // === Mobilný joystick ===
     (function(){
       const touchLandscape = matchMedia('(pointer:coarse)').matches && matchMedia('(orientation:landscape)').matches;
       if(!touchLandscape)return;
@@ -144,7 +145,7 @@
       addEventListener('resize',release);
     })();
 
-    // predvyplň cover, kým hra nenastaví konkrétnu misiu
+    // predvyplň background
     bgCover.src = 'assets/bg1.png';
   </script>
 </body>
