@@ -9,17 +9,26 @@ const config = {
   parent: 'game-container',
   width: GAME_WIDTH,
   height: GAME_HEIGHT,
-  transparent: true,                         // BG rieši iba <img id="bg-cover">
+  transparent: true,
+  scale: {
+    mode: Phaser.Scale.FIT,
+    autoCenter: Phaser.Scale.CENTER_BOTH
+  },
   physics: { default:'arcade', arcade:{ debug:false } },
   audio: { noAudio:false, disableWebAudio:false },
   scene: [MainScene]
 };
 
-let game = null;                            // ⬅️ už NIE hneď
-window.startRescueRiders = function(){      // ⬅️ zavolá sa až po "Start" v index.html
+let game = null;
+window.startRescueRiders = function(){
   if (game) return;
   game = new Phaser.Game(config);
   game.scene.start('main', { isIntro:true });
+
+  // Refresh pri zmene veľkosti/orientácie
+  window.addEventListener('resize', () => {
+    if (game && game.scale) game.scale.refresh();
+  });
 };
 
 /* === Helpers === */
@@ -55,19 +64,16 @@ const MISSIONS = [
 function init(d){ this.currentMission = d?.currentMission ?? 0; this.isIntro = d?.isIntro ?? false; }
 
 function preload(){
-  // Intro / fail / reward – 16:9 nové súbory
   this.load.image('hero16', 'assets/hero_screen_1280x720.png');
   this.load.image('fail16', 'assets/fail_1280x720.png');
   for (let i=1;i<=5;i++) this.load.image(`reward16_${i}`, `assets/reward${i}_1280x720.png`);
 
-  // Herné sprity (pôvodné veľkosti)
   ['jetski_m','jetski_m_left','jetski_m_up','jetski_m_down',
    'jetski_f','jetski_f_left','jetski_f_up','jetski_f_down',
    'swimmer_m','swimmer_f','crook','crook_left','splash',
    'shark','shark_right'
   ].forEach(k=>this.load.image(k,`assets/${k}.png`));
 
-  // Audio
   ['intro_theme','mission_theme','reward_theme','fail_theme','game_complete',
    'jetski_loop','swimmer_spawn','crook_spawn','shark_spawn'
   ].forEach(a=>{
@@ -88,7 +94,7 @@ function create(){
 
   if (this.isIntro){
     const bg = document.getElementById('bg-cover');
-    if (bg) bg.src = 'assets/hero_screen_1280x720.png';   // ⬅️ po nickname chceme titulný screen
+    if (bg) bg.src = 'assets/hero_screen_1280x720.png';
 
     const hero = this.add.image(GAME_WIDTH/2, GAME_HEIGHT/2, 'hero16').setOrigin(0.5);
     const scale = Math.min(GAME_WIDTH/hero.width, GAME_HEIGHT/hero.height); hero.setScale(scale);
@@ -106,27 +112,21 @@ function create(){
     return;
   }
 
-  // --- Mission ---
   this.sound.stopAll(); playLoop(this,'mission_theme',{loop:true,volume:0.7});
 
-  // HTML pozadie pre aktuálnu misiu (žiadne fullscreen images v scéne)
   const bg = document.getElementById('bg-cover');
   if(bg) bg.src = `assets/bg${this.currentMission+1}_1280x720.png`;
 
-  // Loop motora
   this.jetskiSound = this.sound.add('jetski_loop', { loop:true, volume:0 });
   try{ this.jetskiSound.play(); }catch(e){}
 
-  // Hráč
   this.isFemale = Math.random()>0.5;
   const tex = this.isFemale ? 'jetski_f' : 'jetski_m';
   this.player = this.physics.add.sprite(GAME_WIDTH/2, GAME_HEIGHT/2, tex)
                   .setCollideWorldBounds(false).setSize(100,100);
 
-  // Ovládanie
   this.cursors = this.input.keyboard.createCursorKeys();
 
-  // Spawny
   const m = MISSIONS[this.currentMission];
   this.swimmers = this.physics.add.group();
   this.crooks   = this.physics.add.group();
@@ -143,19 +143,18 @@ function create(){
   this.physics.add.overlap(this.player, this.swimmers, rescueSwimmer, null, this);
   this.physics.add.collider(this.player, this.crooks,  catchCrook,   null, this);
 
-  // UI
   const txt = {fontSize:'22px', color:'#fff', fontStyle:'bold', fontFamily:'Arial',
                shadow:{offsetX:1, offsetY:1, color:'#000', blur:3}};
-  this.missionLabel = this.add.text(30, 22, `⭐ MISSION ${this.currentMission+1}`, txt);
-  this.scoreLabel   = this.add.text(GAME_WIDTH/2-60, 22, `💯 SCORE 0`, txt);
-  this.timerLabel   = this.add.text(GAME_WIDTH-150, 22, `🕒 ${m.time}s`, txt);
-  this.goalLabel    = this.add.text(25, 65, `🎯 Rescue ${m.rescued} + Catch ${m.caught}`,
+  this.missionLabel = this.add.text(30, 22, `MISSION ${this.currentMission+1}`, txt);
+  this.scoreLabel   = this.add.text(GAME_WIDTH/2-60, 22, `SCORE 0`, txt);
+  this.timerLabel   = this.add.text(GAME_WIDTH-150, 22, `${m.time}s`, txt);
+  this.goalLabel    = this.add.text(25, 65, `Rescue ${m.rescued} + Catch ${m.caught}`,
                       {fontSize:'18px', color:'#003366', fontStyle:'bold', fontFamily:'Arial'});
 
   this.timeLeft = m.time;
   this.timerEvent = this.time.addEvent({
     delay:1000, loop:true, callback:()=>{
-      this.timeLeft--; this.timerLabel.setText(`🕒 ${this.timeLeft}s`);
+      this.timeLeft--; this.timerLabel.setText(`${this.timeLeft}s`);
       if(this.timeLeft<=0) failMission.call(this);
     }
   });
@@ -185,7 +184,6 @@ function update(){
 
   this.player.setVelocity(vx,vy);
 
-  // clamp do viditeľnej 16:9 plochy
   const hw=this.player.displayWidth/2, hh=this.player.displayHeight/2;
   this.player.x = Phaser.Math.Clamp(this.player.x, hw, GAME_WIDTH - hw);
   this.player.y = Phaser.Math.Clamp(this.player.y, hh, GAME_HEIGHT - hh);
@@ -203,14 +201,14 @@ function popupScore(scene,x,y,text){
 
 function rescueSwimmer(player,swimmer){
   swimmer.destroy(); this.score+=10; this.rescued++;
-  this.scoreLabel.setText(`💯 SCORE ${this.score}`);
+  this.scoreLabel.setText(`SCORE ${this.score}`);
   this.sound.play('swimmer_spawn',{volume:0.6});
   showSplash.call(this,swimmer.x,swimmer.y); popupScore(this,swimmer.x,swimmer.y,'+10');
   checkMission.call(this);
 }
 function catchCrook(player,crook){
   crook.destroy(); this.score+=30; this.caught++;
-  this.scoreLabel.setText(`💯 SCORE ${this.score}`);
+  this.scoreLabel.setText(`SCORE ${this.score}`);
   this.sound.play('crook_spawn',{volume:0.6});
   showSplash.call(this,crook.x,crook.y); popupScore(this,crook.x,crook.y,'+30');
   checkMission.call(this);
@@ -244,7 +242,7 @@ function spawnShark(dir='right'){
 function hitShark(player,shark){
   shark.destroy();
   this.score=Math.max(0,this.score-30);
-  this.scoreLabel.setText(`💯 SCORE ${this.score}`);
+  this.scoreLabel.setText(`SCORE ${this.score}`);
   const flash=this.add.rectangle(GAME_WIDTH/2,GAME_HEIGHT/2,GAME_WIDTH,GAME_HEIGHT,0xff0000,0.3).setDepth(999);
   this.tweens.add({targets:flash,alpha:0,duration:400,onComplete:()=>flash.destroy()});
   showSplash.call(this,player.x,player.y); popupScore(this,player.x,player.y,'-30');
@@ -253,7 +251,7 @@ function hitShark(player,shark){
 /* === Win / Fail === */
 function checkMission(){
   const m=MISSIONS[this.currentMission];
-  this.goalLabel.setText(`🎯 Rescue ${m.rescued} (${this.rescued}/${m.rescued}) + Catch ${m.caught} (${this.caught}/${m.caught})`);
+  this.goalLabel.setText(`Rescue ${m.rescued} (${this.rescued}/${m.rescued}) + Catch ${m.caught} (${this.caught}/${m.caught})`);
   if(this.rescued>=m.rescued && this.caught>=m.caught) missionComplete.call(this);
 }
 function missionComplete(){
@@ -277,7 +275,7 @@ function missionComplete(){
     this.input.once('pointerdown',next);
   }else{
     this.sound.stopAll(); playLoop(this,'game_complete',{loop:true,volume:0.7});
-    this.add.text(GAME_WIDTH/2,GAME_HEIGHT-100,'🏆 Game Complete! 🏆',{fontSize:'32px',color:'#ff0'}).setOrigin(0.5).setDepth(1000);
+    this.add.text(GAME_WIDTH/2,GAME_HEIGHT-100,'Game Complete!',{fontSize:'32px',color:'#ff0'}).setOrigin(0.5).setDepth(1000);
     const r=this.add.text(GAME_WIDTH/2,GAME_HEIGHT-60,'Press R to restart the game',{fontSize:'24px',color:'#fff',backgroundColor:'#000'}).setOrigin(0.5).setDepth(1000);
     this.tweens.add({targets:r,alpha:0.2,yoyo:true,repeat:-1,duration:800});
     const h=(e)=>{ if(e.key==='r'||e.key==='R'){ document.removeEventListener('keydown',h); hardReset(this); } };
