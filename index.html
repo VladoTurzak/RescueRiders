@@ -2,14 +2,16 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Rescue Riders 16:9</title>
+  <title>Rescue Riders 16:9 - FIXED FULLSCREEN</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
     html,body {
-      margin:0; padding:0; background:#000; height:100%; overflow:hidden;
-      display:flex; justify-content:center; align-items:center;
+      background:#000; height:100vh; overflow:hidden;
+      position:fixed; inset:0;
     }
 
+    /* BG - FULLSCREEN COVER */
     #bg-cover {
       position:fixed; inset:0;
       width:100vw; height:100dvh;
@@ -18,6 +20,7 @@
       background:#000;
     }
 
+    /* PHASER - FULLSCREEN FIT */
     #phaser-wrapper {
       position:fixed; inset:0;
       width:100vw; height:100dvh;
@@ -25,60 +28,68 @@
     }
     #game-container {
       position:relative;
-      width:100%; height:100%;
+      width:100vw; height:100dvh;
       max-width:100vw; max-height:100dvh;
     }
     #game-container canvas {
-      display:block; image-rendering: pixelated;
+      display:block !important;
+      width:100% !important; height:100% !important;
+      image-rendering: pixelated;
     }
 
+    /* ROTATE BLOCK */
     #rotate-block {
       display:none; position:fixed; inset:0;
       background:#000; color:#fff; z-index:99999;
       align-items:center; justify-content:center; text-align:center;
-      font-family:Arial, sans-serif;
+      font-family:Arial, sans-serif; font-size:18px;
     }
     @media (orientation:portrait) and (pointer:coarse) {
       #rotate-block { display:flex; }
       #phaser-wrapper, #nick { display:none !important; }
     }
 
+    /* NICK MODAL */
     #nick {
       position:fixed; left:50%; top:50%;
       transform:translate(-50%,-50%);
-      background:rgba(0,0,0,0.9); padding:28px 40px; border-radius:12px;
+      background:rgba(0,0,0,0.95); padding:30px 40px; border-radius:15px;
       color:#fff; text-align:center; font-family:Arial, sans-serif;
-      z-index:10000; width:min(92vw,520px);
-      box-shadow:0 10px 30px rgba(0,0,0,.5);
+      z-index:10000; width:min(90vw,500px); max-width:90vw;
+      box-shadow:0 15px 40px rgba(0,0,0,.8);
     }
-    #nick h2 { margin:0 0 10px; color:#ffcc00; font-weight:800; letter-spacing:.3px; }
-    #nick p { margin:8px 0 12px; opacity:.9; }
+    #nick h2 { margin:0 0 15px; color:#ffcc00; font-size:28px; font-weight:800; letter-spacing:1px; }
+    #nick p { margin:10px 0 20px; opacity:.9; font-size:16px; }
     #nick input { 
-      padding:12px 14px; border:none; border-radius:10px; width:100%; 
-      text-align:center; font-size:16px; outline:none; background:#333; color:#fff;
+      padding:15px 20px; border:none; border-radius:12px; width:100%; 
+      text-align:center; font-size:18px; outline:none; background:#333; color:#fff;
+      margin-bottom:15px;
     }
     #nick button { 
-      margin-top:12px; padding:12px 22px; border:none; border-radius:10px; 
-      background:#ffcc00; font-weight:800; cursor:pointer; width:100%;
+      padding:15px 30px; border:none; border-radius:12px; 
+      background:#ffcc00; color:#000; font-weight:800; cursor:pointer; font-size:18px;
+      width:100%; transition:background .2s;
     }
+    #nick button:hover { background:#ffd700; }
 
-    :root { --joy:min(24vmin,130px); --knob:calc(var(--joy)*.34); }
+    /* JOYSTICK - FULLSCREEN FIXED */
+    :root { --joy:min(22vmin,120px); --knob:calc(var(--joy)*.35); }
     #joy {
-      position:fixed; bottom:5%; left:5%;
+      position:fixed; bottom:6%; left:6%;
       width:var(--joy); height:var(--joy);
       touch-action:none; display:none;
       z-index:99999;
     }
     #joy-base { 
       position:absolute; inset:0; border-radius:50%; 
-      background:rgba(255,255,255,.15); border:2px solid rgba(255,255,255,.4); 
+      background:rgba(255,255,255,.2); border:3px solid rgba(255,255,255,.5); 
     }
     #joy-stick {
       position:absolute; width:var(--knob); height:var(--knob); border-radius:50%;
-      background:rgba(255,255,255,.95);
+      background:rgba(255,255,255,.98);
       left:calc(50% - var(--knob)/2); top:calc(50% - var(--knob)/2);
-      box-shadow:0 0 12px rgba(0,0,0,.6);
-      transition:transform .08s linear;
+      box-shadow:0 4px 20px rgba(0,0,0,.6);
+      transition:transform .08s ease-out;
     }
   </style>
 </head>
@@ -86,14 +97,17 @@
   <img id="bg-cover" src="assets/hero_intro_1280x720.png" alt="background">
   
   <div id="rotate-block">
-    <div><h2>Rotate your device</h2><p>Playable only in landscape</p></div>
+    <div>
+      <h2>🌊 Rotate your device</h2>
+      <p>Playable only in landscape</p>
+    </div>
   </div>
 
   <div id="nick">
-    <h2>Rescue Riders</h2>
+    <h2>🌊 Rescue Riders</h2>
     <p>Enter your nickname:</p>
     <input id="n" maxlength="12" placeholder="Your name" autofocus>
-    <br><button id="go">Start</button>
+    <button id="go">START GAME</button>
   </div>
 
   <div id="phaser-wrapper">
@@ -105,102 +119,73 @@
     <div id="joy-stick"></div>
   </div>
 
-  <!-- BEZ defer – Phaser musí byť načítaný pred main.js -->
+  <!-- BEZ defer - Phaser musí byť načítaný PRED main.js -->
   <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
   <script src="main.js"></script>
 
   <script>
+    console.log('[RR] HTML načítané');
+    
     const nick = document.getElementById('nick');
     const inp = document.getElementById('n');
     const go = document.getElementById('go');
     const joy = document.getElementById('joy');
 
     let blockKeys = true;
-    window.addEventListener('keydown', (e) => {
-      if (!blockKeys && (e.code === 'Space' || e.code === 'Enter')) {
+    document.addEventListener('keydown', (e) => {
+      if (!blockKeys) return;
+      if (e.code === 'Space' || e.code === 'Enter') {
         e.preventDefault(); e.stopPropagation();
       }
     }, true);
 
-    // Audio gesture
-    (function(){
-      let fired = false;
-      const fire = () => { if (fired) return; fired = true; document.dispatchEvent(new Event('rr-user-gesture')); };
-      ['pointerdown','touchstart','click','keydown'].forEach(ev => document.addEventListener(ev, fire, {once:true, passive:true}));
-    })();
+    // Audio gesture unlock
+    let audioGestureFired = false;
+    const fireAudioGesture = () => {
+      if (audioGestureFired) return;
+      audioGestureFired = true;
+      document.dispatchEvent(new CustomEvent('rr-user-gesture'));
+      console.log('[RR] Audio gesture fired');
+    };
+    ['pointerdown','touchstart','click','keydown'].forEach(ev => 
+      document.addEventListener(ev, fireAudioGesture, {once:true, passive:true})
+    );
 
     function startGame() {
       const v = inp.value.trim();
-      if (!v) { alert('Please enter your nickname'); return; }
+      if (!v) { alert('Please enter your nickname!'); return; }
+      
+      console.log('[RR] Start game - nick:', v);
       localStorage.setItem('rr_nickname', v);
       
       nick.style.display = 'none';
       blockKeys = false;
 
-      document.getElementById('bg-cover').src = 'assets/hero_screen_1280x720.png';
+      const bg = document.getElementById('bg-cover');
+      bg.src = 'assets/hero_screen_1280x720.png';
 
-      // Dlhší delay – čaká na Phaser + DOM
+      // 1200ms delay - čaká na Phaser načítanie
       setTimeout(() => {
-        document.dispatchEvent(new Event('rr-user-gesture'));
+        fireAudioGesture();
         if (window.startRescueRiders) {
+          console.log('[RR] Spúšťam startRescueRiders');
           window.startRescueRiders();
+        } else {
+          console.error('[RR] startRescueRiders NEDOSTUPNÉ!');
         }
-      }, 1200);  // 1200ms – overené na GitHub Pages
+      }, 1200);
 
+      // Joystick len mobil landscape
       if ('ontouchstart' in window && window.innerWidth > window.innerHeight) {
         joy.style.display = 'block';
+        console.log('[RR] Joystick zapnutý');
       }
     }
+
     go.addEventListener('click', startGame);
-    inp.addEventListener('keydown', e => { if (e.key === 'Enter') startGame(); });
-
-    // Joystick
-    (function(){
-      const knob = document.getElementById('joy-stick');
-      if (!joy || !knob) return;
-
-      let state = {L:false, R:false, U:false, D:false};
-      const TH = 0.20;
-
-      const send = (key, type) => {
-        const m = {ArrowLeft:37, ArrowUp:38, ArrowRight:39, ArrowDown:40};
-        window.dispatchEvent(new KeyboardEvent(type, {
-          key, code: key, keyCode: m[key], which: m[key], bubbles: true
-        }));
-      };
-
-      const center = () => {
-        const r = joy.getBoundingClientRect();
-        return { x: r.left + r.width / 2, y: r.top + r.height / 2, rad: Math.min(r.width, r.height) * 0.48 };
-      };
-
-      const move = (x, y) => {
-        const c = center();
-        let dx = x - c.x, dy = y - c.y;
-        const L = Math.hypot(dx, dy) || 1, R = c.rad;
-        if (L > R) { dx = (dx / L) * R; dy = (dy / L) * R; }
-        knob.style.transform = `translate(${dx}px, ${dy}px)`;
-        const nx = dx / R, ny = dy / R;
-        const want = { L: nx < -TH, R: nx > TH, U: ny < -TH, D: ny > TH };
-        ['L','R','U','D'].forEach(dir => {
-          const key = {L:'ArrowLeft', R:'ArrowRight', U:'ArrowUp', D:'ArrowDown'}[dir];
-          if (want[dir] && !state[dir]) send(key, 'keydown');
-          if (!want[dir] && state[dir]) send(key, 'keyup');
-        });
-        state = want;
-      };
-
-      const release = () => {
-        knob.style.transform = 'translate(0,0)';
-        ['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].forEach(k => send(k, 'keyup'));
-        state = {L:false, R:false, U:false, D:false};
-      };
-
-      joy.addEventListener('touchstart', e => { e.preventDefault(); move(e.changedTouches[0].clientX, e.changedTouches[0].clientY); }, {passive: false});
-      joy.addEventListener('touchmove', e => { e.preventDefault(); move(e.changedTouches[0].clientX, e.changedTouches[0].clientY); }, {passive: false});
-      joy.addEventListener('touchend', release, {passive: false});
-      joy.addEventListener('touchcancel', release, {passive: false});
-    })();
+    inp.addEventListener('keydown', e => { 
+      if (e.key === 'Enter') startGame(); 
+    });
   </script>
 </body>
 </html>
