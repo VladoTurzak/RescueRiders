@@ -1,75 +1,101 @@
-// Rescue Riders — FIXED: no crop + starts after nick
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Rescue Riders 16:9</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <style>
+    html,body {
+      margin:0; padding:0; background:#000; height:100%; overflow:hidden;
+      display:flex; justify-content:center; align-items:center;
+    }
 
-const GAME_WIDTH = 1280, GAME_HEIGHT = 720;
-const MainScene = { key: 'main', preload, create, update, init };
+    /* BG – vyplní CELÝ screen (dynamicky s UI) */
+    #bg-cover {
+      position:fixed; inset:0;
+      width:100vw; height:100dvh; /* dynamická výška s address bar */
+      object-fit:cover;
+      z-index:0; pointer-events:none;
+      background:#000;
+    }
 
-const config = {
-  type: Phaser.AUTO,
-  parent: 'game-container',
-  width: GAME_WIDTH,
-  height: GAME_HEIGHT,
-  transparent: true,
-  scale: {
-    mode: Phaser.Scale.FIT,
-    autoCenter: Phaser.Scale.CENTER_BOTH
-  },
-  physics: { default: 'arcade', arcade: { debug: false } },
-  audio: { noAudio: false, disableWebAudio: false },
-  scene: [MainScene]
-};
+    /* Phaser FULL viewport (dynamicky) */
+    #phaser-wrapper {
+      position:fixed; inset:0;
+      width:100vw; height:100dvh;
+      display:flex; justify-content:center; align-items:center;
+    }
+    #game-container {
+      position:relative;
+      width:100%; height:100%;
+      max-width:100vw; max-height:100dvh;
+    }
+    #game-container canvas {
+      display:block; image-rendering: pixelated;
+    }
 
-let game = null;
-window.startRescueRiders = function() {
-  if (game) return;
-  game = new Phaser.Game(config);
-  game.scene.start('main', { isIntro: true });
-};
+    /* Rotate block */
+    #rotate-block {
+      display:none; position:fixed; inset:0;
+      background:#000; color:#fff; z-index:99999;
+      align-items:center; justify-content:center; text-align:center;
+      font-family:Arial, sans-serif;
+    }
+    @media (orientation:portrait) and (pointer:coarse) {
+      #rotate-block { display:flex; }
+      #phaser-wrapper, #nick { display:none !important; }
+    }
 
-// Resize listeners
-const resize = () => { if (game && game.scale) game.scale.refresh(); };
-window.addEventListener('resize', resize);
-window.addEventListener('orientationchange', () => setTimeout(resize, 100));
+    /* Nick modal */
+    #nick {
+      position:fixed; left:50%; top:50%;
+      transform:translate(-50%,-50%);
+      background:rgba(0,0,0,0.9); padding:28px 40px; border-radius:12px;
+      color:#fff; text-align:center; font-family:Arial, sans-serif;
+      z-index:10000; width:min(92vw,520px);
+      box-shadow:0 10px 30px rgba(0,0,0,.5);
+    }
+    #nick h2 { margin:0 0 10px; color:#ffcc00; font-weight:800; letter-spacing:.3px; }
+    #nick p { margin:8px 0 12px; opacity:.9; }
+    #nick input { 
+      padding:12px 14px; border:none; border-radius:10px; width:100%; 
+      text-align:center; font-size:16px; outline:none; background:#333; color:#fff;
+    }
+    #nick button { 
+      margin-top:12px; padding:12px 22px; border:none; border-radius:10px; 
+      background:#ffcc00; font-weight:800; cursor:pointer; width:100%;
+    }
 
-/* === Helpers (bez zmien) === */
-function ensureAudio(scene) {
-  if (ensureAudio._done) return;
-  const resume = () => {
-    try { scene.sound.unlock(); } catch(e){}
-    try { const ctx = scene.sound.context; if (ctx && ctx.state !== 'running') ctx.resume(); } catch(e){}
-    ensureAudio._done = true;
-  };
-  ['pointerdown','touchstart','click','keydown'].forEach(ev => {
-    document.addEventListener(ev, resume, {once: true});
-  });
-  scene.input.once('pointerdown', resume);
-  scene.input.keyboard.once('keydown', resume);
-}
-function playLoop(scene, key, cfg) { ensureAudio(scene); try { scene.sound.play(key, cfg); } catch(e) {} }
-function hardReset(sceneCtx) {
-  try { sceneCtx.sound.stopAll(); if (sceneCtx.jetskiSound) sceneCtx.jetskiSound.stop(); } catch(e) {}
-  setTimeout(() => { try { game.destroy(true); } catch(e) {}; game = null; window.startRescueRiders(); }, 40);
-}
+    /* Joystick – FIXED mimo Phaser */
+    :root { --joy:min(24vmin,130px); --knob:calc(var(--joy)*.34); }
+    #joy {
+      position:fixed; bottom:5%; left:5%;
+      width:var(--joy); height:var(--joy);
+      touch-action:none; display:none;
+      z-index:99999;
+    }
+    #joy-base { 
+      position:absolute; inset:0; border-radius:50%; 
+      background:rgba(255,255,255,.15); border:2px solid rgba(255,255,255,.4); 
+    }
+    #joy-stick {
+      position:absolute; width:var(--knob); height:var(--knob); border-radius:50%;
+      background:rgba(255,255,255,.95);
+      left:calc(50% - var(--knob)/2); top:calc(50% - var(--knob)/2);
+      box-shadow:0 0 12px rgba(0,0,0,.6);
+      transition:transform .08s linear;
+    }
+  </style>
+</head>
+<body>
+  <img id="bg-cover" src="assets/hero_intro_1280x720.png" alt="background">
+  
+  <div id="rotate-block">
+    <div><h2>🌊 Rotate your device</h2><p>Playable only in landscape</p></div>
+  </div>
 
-/* === Data (bez zmien) === */
-const MISSIONS = [
-  { rescued:10, caught:3,  time:60, swimmerDelay:1500, crookDelay:7000 },
-  { rescued:12, caught:5,  time:55, swimmerDelay:1400, crookDelay:6000 },
-  { rescued:15, caught:8,  time:50, swimmerDelay:1200, crookDelay:4000 },
-  { rescued:18, caught:10, time:45, swimmerDelay:1100, crookDelay:3000 },
-  { rescued:20, caught:14, time:40, swimmerDelay:1000, crookDelay:2000 }
-];
-
-/* === Scene === */
-function init(d) { 
-  this.currentMission = d?.currentMission ?? 0; 
-  this.isIntro = d?.isIntro ?? false; 
-}
-
-function preload() {
-  this.load.image('hero16', 'assets/hero_screen_1280x720.png');
-  this.load.image('fail16', 'assets/fail_1280x720.png');
-  for (let i = 1; i <= 5; i++) this.load.image(`reward16_${i}`, `assets/reward${i}_1280x720.png`);
-
-  ['jetski_m','jetski_m_left','jetski_m_up','jetski_m_down',
-   'jetski_f','jetski_f_left','jetski_f_up','jetski_f_down',
-   'swimmer_m','swimmer_f','crook','
+  <!-- Nick modal -->
+  <div id="nick">
+    <h2>🌊 Rescue Riders</h2>
+    <p>Enter your nickname:</p>
+    <input id="n" maxlength="12"
