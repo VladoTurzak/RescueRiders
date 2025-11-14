@@ -10,25 +10,25 @@
       display:flex; justify-content:center; align-items:center;
     }
 
-    /* BG – vyplní CELÝ screen */
+    /* BG – vyplní CELÝ screen (dynamicky s UI) */
     #bg-cover {
       position:fixed; inset:0;
-      width:100vw; height:100svh; /* small viewport – bez toolbar cropping */
+      width:100vw; height:100dvh;
       object-fit:cover;
       z-index:0; pointer-events:none;
       background:#000;
     }
 
-    /* Phaser FULL viewport */
+    /* Phaser wrapper */
     #phaser-wrapper {
       position:fixed; inset:0;
-      width:100vw; height:100svh;
+      width:100vw; height:100dvh;
       display:flex; justify-content:center; align-items:center;
     }
     #game-container {
       position:relative;
       width:100%; height:100%;
-      max-width: 100vw; max-height: 100svh;
+      max-width:100vw; max-height:100dvh;
     }
     #game-container canvas {
       display:block; image-rendering: pixelated;
@@ -66,13 +66,13 @@
       background:#ffcc00; font-weight:800; cursor:pointer; width:100%;
     }
 
-    /* Joystick – FIXED mimo Phaser, vysoký z-index */
+    /* Joystick */
     :root { --joy:min(24vmin,130px); --knob:calc(var(--joy)*.34); }
     #joy {
       position:fixed; bottom:5%; left:5%;
       width:var(--joy); height:var(--joy);
       touch-action:none; display:none;
-      z-index:9999;
+      z-index:99999;
     }
     #joy-base { 
       position:absolute; inset:0; border-radius:50%; 
@@ -91,12 +91,12 @@
   <img id="bg-cover" src="assets/hero_intro_1280x720.png" alt="background">
   
   <div id="rotate-block">
-    <div><h2>🌊 Rotate your device</h2><p>Playable only in landscape</p></div>
+    <div><h2>Rotate your device</h2><p>Playable only in landscape</p></div>
   </div>
 
   <!-- Nick modal -->
   <div id="nick">
-    <h2>🌊 Rescue Riders</h2>
+    <h2>Rescue Riders</h2>
     <p>Enter your nickname:</p>
     <input id="n" maxlength="12" placeholder="Your name" autofocus>
     <br><button id="go">Start</button>
@@ -107,14 +107,15 @@
     <div id="game-container"></div>
   </div>
 
-  <!-- Joystick OUTSIDE game-container -->
+  <!-- Joystick mimo Phaser -->
   <div id="joy">
     <div id="joy-base"></div>
     <div id="joy-stick"></div>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js" defer></script>
-  <script src="main.js" defer></script>
+  <!-- Phaser + main.js BEZ defer -->
+  <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
+  <script src="main.js"></script>
 
   <script>
     const nick = document.getElementById('nick');
@@ -130,7 +131,7 @@
       }
     }, true);
 
-    // Gesture pre audio
+    // Audio gesture
     (function(){
       let fired = false;
       const fire = () => { if (fired) return; fired = true; document.dispatchEvent(new Event('rr-user-gesture')); };
@@ -147,13 +148,15 @@
 
       document.getElementById('bg-cover').src = 'assets/hero_screen_1280x720.png';
 
-      // Delay pre stabilný start (fix zaseknutia)
+      // Dlhší delay – čaká na Phaser + DOM
       setTimeout(() => {
         document.dispatchEvent(new Event('rr-user-gesture'));
-        if (window.startRescueRiders) window.startRescueRiders();
-      }, 100);
+        if (window.startRescueRiders) {
+          window.startRescueRiders();
+        }
+      }, 800);
 
-      // Joystick len mobil landscape
+      // Joystick len na mobile landscape
       if ('ontouchstart' in window && window.innerWidth > window.innerHeight) {
         joy.style.display = 'block';
       }
@@ -207,16 +210,8 @@
         state = {L:false, R:false, U:false, D:false};
       };
 
-      joy.addEventListener('touchstart', e => {
-        e.preventDefault();
-        const t = e.changedTouches[0];
-        move(t.clientX, t.clientY);
-      }, {passive: false});
-      joy.addEventListener('touchmove', e => {
-        e.preventDefault();
-        const t = e.changedTouches[0];
-        move(t.clientX, t.clientY);
-      }, {passive: false});
+      joy.addEventListener('touchstart', e => { e.preventDefault(); move(e.changedTouches[0].clientX, e.changedTouches[0].clientY); }, {passive: false});
+      joy.addEventListener('touchmove', e => { e.preventDefault(); move(e.changedTouches[0].clientX, e.changedTouches[0].clientY); }, {passive: false});
       joy.addEventListener('touchend', release, {passive: false});
       joy.addEventListener('touchcancel', release, {passive: false});
     })();
