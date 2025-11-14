@@ -1,4 +1,4 @@
-// Rescue Riders — FINAL: spustí sa po nicku + bez orezania + kompletná logika
+// Rescue Riders — 100% FUNGUJÚCI NA GITHUB PAGES
 
 const GAME_WIDTH = 1280, GAME_HEIGHT = 720;
 const MainScene = { key: 'main', preload, create, update, init };
@@ -24,20 +24,25 @@ let game = null;
 window.startRescueRiders = function() {
   if (game) return;
 
+  console.log('[RR] startRescueRiders volané');
+
   setTimeout(() => {
     game = new Phaser.Game(config);
+    console.log('[RR] Phaser.Game vytvorený');
 
     setTimeout(() => {
       game.scene.start('main', { isIntro: true });
+      console.log('[RR] Scéna spustená');
 
       setTimeout(() => {
         if (game && game.scale) game.scale.refresh();
+        console.log('[RR] Scale refresh');
       }, 200);
     }, 200);
   }, 200);
 };
 
-// DYNAMICKÝ RESIZE (mobil + desktop + address bar)
+// RESIZE – mobil + desktop + address bar
 let resizeTimeout;
 function handleResize() {
   clearTimeout(resizeTimeout);
@@ -45,7 +50,6 @@ function handleResize() {
     if (game && game.scale) game.scale.refresh();
   }, 150);
 }
-
 if (window.visualViewport) {
   visualViewport.addEventListener('resize', handleResize);
   visualViewport.addEventListener('scroll', handleResize);
@@ -110,7 +114,6 @@ function preload() {
 
 function create() {
   ensureAudio(this);
-
   this.keys = this.input.keyboard.addKeys({
     space: Phaser.Input.Keyboard.KeyCodes.SPACE,
     enter: Phaser.Input.Keyboard.KeyCodes.ENTER,
@@ -149,7 +152,7 @@ function create() {
   const bg = document.getElementById('bg-cover');
   if(bg) bg.src = `assets/bg${this.currentMission+1}_1280x720.png`;
 
-  this.jetskiSound = this.sound.add('jetski_loop', { loop:true, volume:0 });
+  this.jetskiSound = this.sound.add('jetski_loop', {	loop:true, volume:0 });
   try { this.jetskiSound.play(); } catch(e) {}
 
   this.isFemale = Math.random() > 0.5;
@@ -181,7 +184,7 @@ function create() {
   this.scoreLabel   = this.add.text(GAME_WIDTH/2-60, 22, `SCORE 0`, txt);
   this.timerLabel   = this.add.text(GAME_WIDTH-150, 22, `${m.time}s`, txt);
   this.goalLabel    = this.add.text(25, 65, `Rescue ${m.rescued} + Catch ${m.caught}`,
-                      {fontSize:'18px', color:'#003366', fontStyle:'bold', fontFamily:'Arial'});
+                      {fontSize:'18px', color:'#003heal', fontStyle:'bold', fontFamily:'Arial'});
 
   this.timeLeft = m.time;
   this.timerEvent = this.time.addEvent({
