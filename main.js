@@ -15,8 +15,12 @@ const config = {
   scene: [MainScene]
 };
 
-let game = new Phaser.Game(config);
-game.scene.start('main', { isIntro:true });
+let game = null;                            // ⬅️ už NIE hneď
+window.startRescueRiders = function(){      // ⬅️ zavolá sa až po "Start" v index.html
+  if (game) return;
+  game = new Phaser.Game(config);
+  game.scene.start('main', { isIntro:true });
+};
 
 /* === Helpers === */
 function ensureAudio(scene) {
@@ -35,7 +39,7 @@ function ensureAudio(scene) {
 function playLoop(scene,key,cfg){ ensureAudio(scene); try{ scene.sound.play(key,cfg); }catch(e){} }
 function hardReset(sceneCtx){
   try{ sceneCtx.sound.stopAll(); if(sceneCtx.jetskiSound) sceneCtx.jetskiSound.stop(); }catch(e){}
-  setTimeout(()=>{ try{game.destroy(true);}catch(e){}; game=new Phaser.Game(config); game.scene.start('main',{isIntro:true}); },40);
+  setTimeout(()=>{ try{game.destroy(true);}catch(e){}; game=null; window.startRescueRiders(); },40);
 }
 
 /* === Data === */
@@ -83,7 +87,8 @@ function create(){
   });
 
   if (this.isIntro){
-    const bg = document.getElementById('bg-cover'); if(bg) bg.src = 'assets/bg1_1280x720.png';
+    const bg = document.getElementById('bg-cover');
+    if (bg) bg.src = 'assets/hero_screen_1280x720.png';   // ⬅️ po nickname chceme titulný screen
 
     const hero = this.add.image(GAME_WIDTH/2, GAME_HEIGHT/2, 'hero16').setOrigin(0.5);
     const scale = Math.min(GAME_WIDTH/hero.width, GAME_HEIGHT/hero.height); hero.setScale(scale);
@@ -104,7 +109,7 @@ function create(){
   // --- Mission ---
   this.sound.stopAll(); playLoop(this,'mission_theme',{loop:true,volume:0.7});
 
-  // HTML pozadie pre aktuálnu misiu
+  // HTML pozadie pre aktuálnu misiu (žiadne fullscreen images v scéne)
   const bg = document.getElementById('bg-cover');
   if(bg) bg.src = `assets/bg${this.currentMission+1}_1280x720.png`;
 
