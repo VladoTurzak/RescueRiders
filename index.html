@@ -13,13 +13,13 @@
     /* BG – vyplní CELÝ screen (dynamicky s UI) */
     #bg-cover {
       position:fixed; inset:0;
-      width:100vw; height:100dvh;
+      width:100vw; height:100dvh; /* dynamická výška s address bar */
       object-fit:cover;
       z-index:0; pointer-events:none;
       background:#000;
     }
 
-    /* Phaser wrapper */
+    /* Phaser FULL viewport (dynamicky) */
     #phaser-wrapper {
       position:fixed; inset:0;
       width:100vw; height:100dvh;
@@ -66,7 +66,7 @@
       background:#ffcc00; font-weight:800; cursor:pointer; width:100%;
     }
 
-    /* Joystick */
+    /* Joystick – FIXED mimo Phaser */
     :root { --joy:min(24vmin,130px); --knob:calc(var(--joy)*.34); }
     #joy {
       position:fixed; bottom:5%; left:5%;
@@ -91,130 +91,11 @@
   <img id="bg-cover" src="assets/hero_intro_1280x720.png" alt="background">
   
   <div id="rotate-block">
-    <div><h2>Rotate your device</h2><p>Playable only in landscape</p></div>
+    <div><h2>🌊 Rotate your device</h2><p>Playable only in landscape</p></div>
   </div>
 
   <!-- Nick modal -->
   <div id="nick">
-    <h2>Rescue Riders</h2>
+    <h2>🌊 Rescue Riders</h2>
     <p>Enter your nickname:</p>
-    <input id="n" maxlength="12" placeholder="Your name" autofocus>
-    <br><button id="go">Start</button>
-  </div>
-
-  <!-- Phaser wrapper -->
-  <div id="phaser-wrapper">
-    <div id="game-container"></div>
-  </div>
-
-  <!-- Joystick mimo Phaser -->
-  <div id="joy">
-    <div id="joy-base"></div>
-    <div id="joy-stick"></div>
-  </div>
-
-  <!-- Phaser + main.js BEZ defer -->
-  <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
-  <script src="main.js"></script>
-
-  <script>
-    const nick = document.getElementById('nick');
-    const inp = document.getElementById('n');
-    const go = document.getElementById('go');
-    const joy = document.getElementById('joy');
-
-    let blockKeys = true;
-    window.addEventListener('keydown', (e) => {
-      if (!blockKeys) return;
-      if (e.code === 'Space' || e.code === 'Enter') {
-        e.preventDefault(); e.stopPropagation();
-      }
-    }, true);
-
-    // Audio gesture
-    (function(){
-      let fired = false;
-      const fire = () => { if (fired) return; fired = true; document.dispatchEvent(new Event('rr-user-gesture')); };
-      ['pointerdown','touchstart','click','keydown'].forEach(ev => document.addEventListener(ev, fire, {once:true, passive:true}));
-    })();
-
-    function startGame() {
-      const v = inp.value.trim();
-      if (!v) { alert('Please enter your nickname'); return; }
-      localStorage.setItem('rr_nickname', v);
-      
-      nick.style.display = 'none';
-      blockKeys = false;
-
-      document.getElementById('bg-cover').src = 'assets/hero_screen_1280x720.png';
-
-      // Dlhší delay – čaká na Phaser + DOM
-      setTimeout(() => {
-        document.dispatchEvent(new Event('rr-user-gesture'));
-        if (window.startRescueRiders) {
-          window.startRescueRiders();
-        }
-      }, 800);
-
-      // Joystick len na mobile landscape
-      if ('ontouchstart' in window && window.innerWidth > window.innerHeight) {
-        joy.style.display = 'block';
-      }
-    }
-    go.addEventListener('click', startGame);
-    inp.addEventListener('keydown', e => { if (e.key === 'Enter') startGame(); });
-
-    // Joystick logic
-    (function(){
-      const knob = document.getElementById('joy-stick');
-      if (!joy || !knob) return;
-
-      let state = {L:false, R:false, U:false, D:false};
-      const TH = 0.20;
-
-      const send = (key, type) => {
-        const m = {ArrowLeft:37, ArrowUp:38, ArrowRight:39, ArrowDown:40};
-        window.dispatchEvent(new KeyboardEvent(type, {
-          key, code: key, keyCode: m[key], which: m[key], bubbles: true
-        }));
-      };
-
-      const center = () => {
-        const r = joy.getBoundingClientRect();
-        return {
-          x: r.left + r.width / 2,
-          y: r.top + r.height / 2,
-          rad: Math.min(r.width, r.height) * 0.48
-        };
-      };
-
-      const move = (x, y) => {
-        const c = center();
-        let dx = x - c.x, dy = y - c.y;
-        const L = Math.hypot(dx, dy) || 1, R = c.rad;
-        if (L > R) { dx = (dx / L) * R; dy = (dy / L) * R; }
-        knob.style.transform = `translate(${dx}px, ${dy}px)`;
-        const nx = dx / R, ny = dy / R;
-        const want = { L: nx < -TH, R: nx > TH, U: ny < -TH, D: ny > TH };
-        ['L','R','U','D'].forEach(dir => {
-          const key = {L:'ArrowLeft', R:'ArrowRight', U:'ArrowUp', D:'ArrowDown'}[dir];
-          if (want[dir] && !state[dir]) send(key, 'keydown');
-          if (!want[dir] && state[dir]) send(key, 'keyup');
-        });
-        state = want;
-      };
-
-      const release = () => {
-        knob.style.transform = 'translate(0,0)';
-        ['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].forEach(k => send(k, 'keyup'));
-        state = {L:false, R:false, U:false, D:false};
-      };
-
-      joy.addEventListener('touchstart', e => { e.preventDefault(); move(e.changedTouches[0].clientX, e.changedTouches[0].clientY); }, {passive: false});
-      joy.addEventListener('touchmove', e => { e.preventDefault(); move(e.changedTouches[0].clientX, e.changedTouches[0].clientY); }, {passive: false});
-      joy.addEventListener('touchend', release, {passive: false});
-      joy.addEventListener('touchcancel', release, {passive: false});
-    })();
-  </script>
-</body>
-</html>
+    <input id="n" maxlength="12"
