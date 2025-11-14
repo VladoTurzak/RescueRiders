@@ -10,7 +10,6 @@
       display:flex; justify-content:center; align-items:center;
     }
 
-    /* BG – vyplní CELÝ screen (dynamicky s UI) */
     #bg-cover {
       position:fixed; inset:0;
       width:100vw; height:100dvh;
@@ -19,7 +18,6 @@
       background:#000;
     }
 
-    /* Phaser wrapper */
     #phaser-wrapper {
       position:fixed; inset:0;
       width:100vw; height:100dvh;
@@ -34,7 +32,6 @@
       display:block; image-rendering: pixelated;
     }
 
-    /* Rotate block */
     #rotate-block {
       display:none; position:fixed; inset:0;
       background:#000; color:#fff; z-index:99999;
@@ -46,7 +43,6 @@
       #phaser-wrapper, #nick { display:none !important; }
     }
 
-    /* Nick modal */
     #nick {
       position:fixed; left:50%; top:50%;
       transform:translate(-50%,-50%);
@@ -66,7 +62,6 @@
       background:#ffcc00; font-weight:800; cursor:pointer; width:100%;
     }
 
-    /* Joystick */
     :root { --joy:min(24vmin,130px); --knob:calc(var(--joy)*.34); }
     #joy {
       position:fixed; bottom:5%; left:5%;
@@ -94,7 +89,6 @@
     <div><h2>Rotate your device</h2><p>Playable only in landscape</p></div>
   </div>
 
-  <!-- Nick modal -->
   <div id="nick">
     <h2>Rescue Riders</h2>
     <p>Enter your nickname:</p>
@@ -102,18 +96,16 @@
     <br><button id="go">Start</button>
   </div>
 
-  <!-- Phaser wrapper -->
   <div id="phaser-wrapper">
     <div id="game-container"></div>
   </div>
 
-  <!-- Joystick mimo Phaser -->
   <div id="joy">
     <div id="joy-base"></div>
     <div id="joy-stick"></div>
   </div>
 
-  <!-- Phaser + main.js BEZ defer -->
+  <!-- BEZ defer – Phaser musí byť načítaný pred main.js -->
   <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
   <script src="main.js"></script>
 
@@ -125,8 +117,7 @@
 
     let blockKeys = true;
     window.addEventListener('keydown', (e) => {
-      if (!blockKeys) return;
-      if (e.code === 'Space' || e.code === 'Enter') {
+      if (!blockKeys && (e.code === 'Space' || e.code === 'Enter')) {
         e.preventDefault(); e.stopPropagation();
       }
     }, true);
@@ -154,9 +145,8 @@
         if (window.startRescueRiders) {
           window.startRescueRiders();
         }
-      }, 800);
+      }, 1200);  // 1200ms – overené na GitHub Pages
 
-      // Joystick len na mobile landscape
       if ('ontouchstart' in window && window.innerWidth > window.innerHeight) {
         joy.style.display = 'block';
       }
@@ -164,7 +154,7 @@
     go.addEventListener('click', startGame);
     inp.addEventListener('keydown', e => { if (e.key === 'Enter') startGame(); });
 
-    // Joystick logic
+    // Joystick
     (function(){
       const knob = document.getElementById('joy-stick');
       if (!joy || !knob) return;
@@ -181,11 +171,7 @@
 
       const center = () => {
         const r = joy.getBoundingClientRect();
-        return {
-          x: r.left + r.width / 2,
-          y: r.top + r.height / 2,
-          rad: Math.min(r.width, r.height) * 0.48
-        };
+        return { x: r.left + r.width / 2, y: r.top + r.height / 2, rad: Math.min(r.width, r.height) * 0.48 };
       };
 
       const move = (x, y) => {
