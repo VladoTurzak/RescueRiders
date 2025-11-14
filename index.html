@@ -8,6 +8,7 @@
     html,body { margin:0; padding:0; background:#000; height:100%; overflow:hidden; }
     body { display:flex; align-items:center; justify-content:center; flex-direction:column; }
 
+    /* spodná vrstva – vyplní celý displej (16:9 obrázky sa "covernú" bez deformácie) */
     #bg-cover {
       position:fixed; inset:0;
       width:100vw; height:100dvh;
@@ -16,6 +17,7 @@
       background:#000;
     }
 
+    /* kontajner pre Phaser canvas 16:9 */
     #game-container {
       position:relative;
       width:100%;
@@ -23,13 +25,13 @@
       aspect-ratio:16/9;
       z-index:1;
     }
-
     #game-container canvas {
       width:100%; height:100%;
       display:block;
       aspect-ratio:16/9;
     }
 
+    /* blokátor pre portrait na mobile */
     #rotate-block {
       display:none;
       position:fixed; inset:0;
@@ -37,65 +39,56 @@
       z-index:9999;
       align-items:center; justify-content:center;
       text-align:center;
-      font-family:Arial;
+      font-family:Arial, sans-serif;
     }
     @media (orientation:portrait) and (pointer:coarse) {
       #rotate-block { display:flex; }
     }
 
+    /* modal s nickom */
     #nick {
       position:fixed; left:50%; top:50%;
       transform:translate(-50%,-50%);
-      background:rgba(0,0,0,0.7);
-      padding:28px 40px; border-radius:10px;
+      background:rgba(0,0,0,0.72);
+      padding:28px 40px; border-radius:12px;
       color:#fff; text-align:center;
-      font-family:Arial;
-      z-index:1000;
+      font-family:Arial, sans-serif;
+      z-index:1000; width:min(92vw,520px);
+      box-shadow:0 10px 30px rgba(0,0,0,.35);
+      backdrop-filter: blur(2px);
     }
-    #nick h2 { margin:0 0 10px; color:#ffcc00; }
+    #nick h2 { margin:0 0 10px; color:#ffcc00; font-weight:800; letter-spacing:.3px; }
+    #nick p { margin:8px 0 12px; opacity:.9; }
     #nick input {
-      padding:10px; border:none; border-radius:8px;
-      width:80%; text-align:center;
+      padding:12px 14px; border:none; border-radius:10px;
+      width:100%; text-align:center; font-size:16px;
+      outline:none;
     }
     #nick button {
-      margin-top:10px; padding:10px 20px;
-      border:none; border-radius:8px;
-      background:#ffcc00; font-weight:bold;
-      cursor:pointer;
+      margin-top:12px; padding:12px 22px;
+      border:none; border-radius:10px;
+      background:#ffcc00; font-weight:800; cursor:pointer;
     }
 
+    /* joystick – default skrytý, zapneme JS-om po štarte (touch + landscape) */
     :root { --joy:min(26vmin,140px); --knob:calc(var(--joy)*.34); }
-    #joy {
-      position:fixed; bottom:4%; left:4%;
-      width:var(--joy); height:var(--joy);
-      touch-action:none; display:none;
-      z-index:10;
-    }
-    #joy-base {
-      position:absolute; inset:0;
-      border-radius:50%;
-      background:rgba(255,255,255,.1);
-      border:2px solid rgba(255,255,255,.3);
-    }
+    #joy { position:fixed; bottom:4%; left:4%; width:var(--joy); height:var(--joy); touch-action:none; display:none; z-index:10; }
+    #joy-base { position:absolute; inset:0; border-radius:50%; background:rgba(255,255,255,.12); border:2px solid rgba(255,255,255,.32); }
     #joy-stick {
-      position:absolute;
-      width:var(--knob); height:var(--knob);
-      border-radius:50%;
-      background:rgba(255,255,255,.9);
-      left:calc(50% - var(--knob)/2);
-      top:calc(50% - var(--knob)/2);
+      position:absolute; width:var(--knob); height:var(--knob); border-radius:50%;
+      background:rgba(255,255,255,.95);
+      left:calc(50% - var(--knob)/2); top:calc(50% - var(--knob)/2);
       box-shadow:0 0 14px rgba(0,0,0,.5);
       transition:transform .05s linear;
-    }
-    @media (pointer:coarse) and (orientation:landscape) {
-      #joy { display:block; }
     }
   </style>
 </head>
 <body>
-  <img id="bg-cover" src="assets/bg1.png" alt="background">
+  <!-- pri nicku chceme intro vizuál -->
+  <img id="bg-cover" src="assets/hero_intro_1280x720.png" alt="background">
   <div id="rotate-block"><div><h2>Rotate your device</h2><p>Playable only in landscape</p></div></div>
 
+  <!-- modal s nickom (krok 1) -->
   <div id="nick">
     <h2>🌊 Rescue Riders</h2>
     <p>Enter your nickname:</p>
@@ -103,6 +96,7 @@
     <br><button id="go">Start</button>
   </div>
 
+  <!-- kontajner pre hru a joystick -->
   <div id="game-container">
     <div id="joy">
       <div id="joy-base"></div>
@@ -115,52 +109,92 @@
 
   <script>
     const nick = document.getElementById('nick');
-    const inp = document.getElementById('n');
-    const go = document.getElementById('go');
+    const inp  = document.getElementById('n');
+    const go   = document.getElementById('go');
 
+    /* 1) Kým je zobrazený nick modal, blokujeme SPACE/ENTER,
+          aby sa nespustilo Phaser intro pod modalom */
+    let blockKeys = true;
+    function keyBlocker(e){
+      if (!blockKeys) return;
+      if (e.code === 'Space' || e.code === 'Enter') {
+        e.preventDefault(); e.stopPropagation();
+      }
+    }
+    window.addEventListener('keydown', keyBlocker, true);
+
+    /* 2) Stabilné “gesture” pre odomknutie zvuku */
+    (function(){
+      let fired=false;
+      const fire=()=>{ if(fired) return; fired=true; try{ document.dispatchEvent(new Event('rr-user-gesture')); }catch(e){} };
+      ['pointerdown','touchstart','click','keydown'].forEach(ev=>document.addEventListener(ev,fire,{once:true,passive:true}));
+    })();
+
+    /* 3) Štart hry po zadaní nicku (nastaví BG na hero screen a spustí Phaser) */
     function startGame() {
       const v = inp.value.trim();
       if(!v){ alert('Please enter your nickname'); return; }
       localStorage.setItem('rr_nickname', v);
       nick.style.display = 'none';
+      blockKeys = false;
+
+      // po nicku – titulný screen s “Press SPACE…”
+      const bg = document.getElementById('bg-cover');
+      if (bg) bg.src = 'assets/hero_screen_1280x720.png';
+
       try { document.dispatchEvent(new Event('rr-user-gesture')); } catch(e) {}
+
+      if (window.startRescueRiders) window.startRescueRiders();
+
+      // zapneme joystick pre touch + landscape
+      const joy = document.getElementById('joy');
+      if ('ontouchstart' in window && window.innerWidth > window.innerHeight) {
+        joy.style.display = 'block';
+      } else {
+        joy.style.display = 'none';
+      }
     }
     go.addEventListener('click', startGame);
     inp.addEventListener('keydown', e => { if(e.key === 'Enter') startGame(); });
 
-    // === Gesture bridge ===
+    /* 4) Joystick: posiela šípky ako KeyboardEvent (ArrowLeft/Up/Right/Down) */
     (function(){
-      let fired=false;
-      const fire=()=>{if(fired)return;fired=true;try{document.dispatchEvent(new Event('rr-user-gesture'));}catch(e){}};
-      ['pointerdown','touchstart','click','keydown'].forEach(ev=>{
-        document.addEventListener(ev,fire,{once:true,passive:true});
-      });
-    })();
+      const joy  = document.getElementById('joy');
+      const knob = document.getElementById('joy-stick');
+      if(!joy) return;
 
-    // === Joystick ===
-    (function(){
-      const joy=document.getElementById('joy');
-      const knob=document.getElementById('joy-stick');
-      if(!joy)return;
-      const touchLandscape = matchMedia('(pointer:coarse)').matches && matchMedia('(orientation:landscape)').matches;
-      if(!touchLandscape)return;
       let state={L:false,R:false,U:false,D:false};
-      const TH=0.20;
-      const send=(key,type)=>{const m={ArrowLeft:37,ArrowUp:38,ArrowRight:39,ArrowDown:40};
-        window.dispatchEvent(new KeyboardEvent(type,{key,code:key,keyCode:m[key],which:m[key],bubbles:true}));};
-      function center(){const r=joy.getBoundingClientRect();return{x:r.left+r.width/2,y:r.top+r.height/2,rad:Math.min(r.width,r.height)*0.48};}
-      function move(x,y){const c=center();let dx=x-c.x,dy=y-c.y;const L=Math.hypot(dx,dy)||1,R=c.rad;if(L>R){dx=dx/L*R;dy=dy/L*R;}
-        knob.style.transform=`translate(${dx}px,${dy}px)`;const nx=dx/R,ny=dy/R;
-        const want={L:nx<-TH,R:nx>TH,U:ny<-TH,D:ny>TH};
-        if(want.L&&!state.L)send('ArrowLeft','keydown');if(!want.L&&state.L)send('ArrowLeft','keyup');
-        if(want.R&&!state.R)send('ArrowRight','keydown');if(!want.R&&state.R)send('ArrowRight','keyup');
-        if(want.U&&!state.U)send('ArrowUp','keydown');if(!want.U&&state.U)send('ArrowUp','keyup');
-        if(want.D&&!state.D)send('ArrowDown','keydown');if(!want.D&&state.D)send('ArrowDown','keyup');
-        state=want;}
-      function release(){knob.style.transform='translate(0,0)';['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].forEach(k=>send(k,'keyup'));state={L:false,R:false,U:false,D:false};}
+      const TH=0.20; // mŕtva zóna
+
+      const send=(key,type)=>{
+        const m={ArrowLeft:37,ArrowUp:38,ArrowRight:39,ArrowDown:40};
+        window.dispatchEvent(new KeyboardEvent(type,{key,code:key,keyCode:m[key],which:m[key],bubbles:true}));
+      };
+      const center=()=>{
+        const r=joy.getBoundingClientRect();
+        return { x:r.left+r.width/2, y:r.top+r.height/2, rad:Math.min(r.width,r.height)*0.48 };
+      };
+      const move=(x,y)=>{
+        const c=center(); let dx=x-c.x, dy=y-c.y; const L=Math.hypot(dx,dy)||1, R=c.rad;
+        if(L>R){ dx=dx/L*R; dy=dy/L*R; }
+        knob.style.transform=`translate(${dx}px,${dy}px)`;
+        const nx=dx/R, ny=dy/R;
+        const want={ L:nx<-TH, R:nx>TH, U:ny<-TH, D:ny>TH };
+        if(want.L&&!state.L)send('ArrowLeft','keydown');  if(!want.L&&state.L)send('ArrowLeft','keyup');
+        if(want.R&&!state.R)send('ArrowRight','keydown'); if(!want.R&&state.R)send('ArrowRight','keyup');
+        if(want.U&&!state.U)send('ArrowUp','keydown');    if(!want.U&&state.U)send('ArrowUp','keyup');
+        if(want.D&&!state.D)send('ArrowDown','keydown');  if(!want.D&&state.D)send('ArrowDown','keyup');
+        state=want;
+      };
+      const release=()=>{
+        knob.style.transform='translate(0,0)';
+        ['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].forEach(k=>send(k,'keyup'));
+        state={L:false,R:false,U:false,D:false};
+      };
+
       joy.addEventListener('touchstart',e=>{const t=e.changedTouches[0];move(t.clientX,t.clientY)},{passive:true});
-      joy.addEventListener('touchmove',e=>{const t=e.changedTouches[0];move(t.clientX,t.clientY)},{passive:true});
-      joy.addEventListener('touchend',release,{passive:true});
+      joy.addEventListener('touchmove', e=>{const t=e.changedTouches[0];move(t.clientX,t.clientY)},{passive:true});
+      joy.addEventListener('touchend',  release,{passive:true});
       joy.addEventListener('touchcancel',release,{passive:true});
     })();
   </script>
