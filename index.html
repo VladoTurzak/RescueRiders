@@ -2,16 +2,16 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Rescue Riders 16:9 - FIXED FULLSCREEN</title>
+  <title>Rescue Riders 16:9 - PERFECT FIT</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <style>
     * { margin:0; padding:0; box-sizing:border-box; }
-    html,body {
-      background:#000; height:100vh; overflow:hidden;
-      position:fixed; inset:0;
+    html, body {
+      background:#000; width:100vw; height:100dvh; overflow:hidden;
+      position:fixed; inset:0; font-family:Arial, sans-serif;
     }
 
-    /* BG - FULLSCREEN COVER */
+    /* BACKGROUND - FULLSCREEN */
     #bg-cover {
       position:fixed; inset:0;
       width:100vw; height:100dvh;
@@ -20,21 +20,28 @@
       background:#000;
     }
 
-    /* PHASER - FULLSCREEN FIT */
+    /* PHASER WRAPPER - FULLSCREEN */
     #phaser-wrapper {
       position:fixed; inset:0;
       width:100vw; height:100dvh;
       display:flex; justify-content:center; align-items:center;
+      z-index:1;
     }
+
+    /* GAME CONTAINER - LET PHASER FIT */
     #game-container {
       position:relative;
-      width:100vw; height:100dvh;
+      width:100%; height:100%; /* Phaser sám prispôsobí */
       max-width:100vw; max-height:100dvh;
     }
+
+    /* CANVAS - PRESNÉ ZOBRAZENIE */
     #game-container canvas {
-      display:block !important;
-      width:100% !important; height:100% !important;
-      image-rendering: pixelated;
+      display:block;
+      width:100% !important;
+      height:100% !important;
+      object-fit:contain; /* ZABEZPEČÍ LETTERBOX */
+      image-rendering:pixelated;
     }
 
     /* ROTATE BLOCK */
@@ -42,7 +49,7 @@
       display:none; position:fixed; inset:0;
       background:#000; color:#fff; z-index:99999;
       align-items:center; justify-content:center; text-align:center;
-      font-family:Arial, sans-serif; font-size:18px;
+      font-size:18px;
     }
     @media (orientation:portrait) and (pointer:coarse) {
       #rotate-block { display:flex; }
@@ -54,11 +61,11 @@
       position:fixed; left:50%; top:50%;
       transform:translate(-50%,-50%);
       background:rgba(0,0,0,0.95); padding:30px 40px; border-radius:15px;
-      color:#fff; text-align:center; font-family:Arial, sans-serif;
-      z-index:10000; width:min(90vw,500px); max-width:90vw;
+      color:#fff; text-align:center; z-index:10000;
+      width:min(90vw,500px); max-width:90vw;
       box-shadow:0 15px 40px rgba(0,0,0,.8);
     }
-    #nick h2 { margin:0 0 15px; color:#ffcc00; font-size:28px; font-weight:800; letter-spacing:1px; }
+    #nick h2 { margin:0 0 15px; color:#ffcc00; font-size:28px; font-weight:800; }
     #nick p { margin:10px 0 20px; opacity:.9; font-size:16px; }
     #nick input { 
       padding:15px 20px; border:none; border-radius:12px; width:100%; 
@@ -68,11 +75,10 @@
     #nick button { 
       padding:15px 30px; border:none; border-radius:12px; 
       background:#ffcc00; color:#000; font-weight:800; cursor:pointer; font-size:18px;
-      width:100%; transition:background .2s;
+      width:100%;
     }
-    #nick button:hover { background:#ffd700; }
 
-    /* JOYSTICK - FULLSCREEN FIXED */
+    /* JOYSTICK */
     :root { --joy:min(22vmin,120px); --knob:calc(var(--joy)*.35); }
     #joy {
       position:fixed; bottom:6%; left:6%;
@@ -98,13 +104,13 @@
   
   <div id="rotate-block">
     <div>
-      <h2>🌊 Rotate your device</h2>
+      <h2>Rotate your device</h2>
       <p>Playable only in landscape</p>
     </div>
   </div>
 
   <div id="nick">
-    <h2>🌊 Rescue Riders</h2>
+    <h2>Rescue Riders</h2>
     <p>Enter your nickname:</p>
     <input id="n" maxlength="12" placeholder="Your name" autofocus>
     <button id="go">START GAME</button>
@@ -119,13 +125,13 @@
     <div id="joy-stick"></div>
   </div>
 
-  <!-- BEZ defer - Phaser musí byť načítaný PRED main.js -->
+  <!-- PHASER + MAIN.JS -->
   <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
   <script src="main.js"></script>
 
   <script>
     console.log('[RR] HTML načítané');
-    
+
     const nick = document.getElementById('nick');
     const inp = document.getElementById('n');
     const go = document.getElementById('go');
@@ -133,59 +139,97 @@
 
     let blockKeys = true;
     document.addEventListener('keydown', (e) => {
-      if (!blockKeys) return;
-      if (e.code === 'Space' || e.code === 'Enter') {
-        e.preventDefault(); e.stopPropagation();
+      if (!blockKeys && (e.code === 'Space' || e.code === 'Enter')) {
+        e.preventDefault();
       }
     }, true);
 
-    // Audio gesture unlock
-    let audioGestureFired = false;
-    const fireAudioGesture = () => {
-      if (audioGestureFired) return;
-      audioGestureFired = true;
-      document.dispatchEvent(new CustomEvent('rr-user-gesture'));
-      console.log('[RR] Audio gesture fired');
+    // Audio unlock
+    let audioUnlocked = false;
+    const unlockAudio = () => {
+      if (audioUnlocked) return;
+      audioUnlocked = true;
+      document.dispatchEvent(new CustomEvent('rr-unlock-audio'));
+      console.log('[RR] Audio odomknuté');
     };
     ['pointerdown','touchstart','click','keydown'].forEach(ev => 
-      document.addEventListener(ev, fireAudioGesture, {once:true, passive:true})
+      document.addEventListener(ev, unlockAudio, {once:true, passive:true})
     );
 
     function startGame() {
-      const v = inp.value.trim();
-      if (!v) { alert('Please enter your nickname!'); return; }
-      
-      console.log('[RR] Start game - nick:', v);
-      localStorage.setItem('rr_nickname', v);
-      
+      const name = inp.value.trim();
+      if (!name) { alert('Enter nickname!'); return; }
+      localStorage.setItem('rr_nickname', name);
+
       nick.style.display = 'none';
       blockKeys = false;
 
-      const bg = document.getElementById('bg-cover');
-      bg.src = 'assets/hero_screen_1280x720.png';
+      document.getElementById('bg-cover').src = 'assets/hero_screen_1280x720.png';
 
-      // 1200ms delay - čaká na Phaser načítanie
       setTimeout(() => {
-        fireAudioGesture();
+        unlockAudio();
         if (window.startRescueRiders) {
-          console.log('[RR] Spúšťam startRescueRiders');
+          console.log('[RR] Spúšťam hru...');
           window.startRescueRiders();
-        } else {
-          console.error('[RR] startRescueRiders NEDOSTUPNÉ!');
         }
       }, 1200);
 
-      // Joystick len mobil landscape
       if ('ontouchstart' in window && window.innerWidth > window.innerHeight) {
         joy.style.display = 'block';
-        console.log('[RR] Joystick zapnutý');
       }
     }
 
     go.addEventListener('click', startGame);
-    inp.addEventListener('keydown', e => { 
-      if (e.key === 'Enter') startGame(); 
-    });
+    inp.addEventListener('keydown', e => { if (e.key === 'Enter') startGame(); });
+
+    // Joystick
+    (function() {
+      const knob = document.getElementById('joy-stick');
+      if (!knob) return;
+
+      let state = {L:false,R:false,U:false,D:false};
+      const TH = 0.25;
+
+      const send = (key, type) => {
+        const codes = {ArrowLeft:37, ArrowUp:38, ArrowRight:39, ArrowDown:40};
+        window.dispatchEvent(new KeyboardEvent(type, {
+          key, code:key, keyCode:codes[key], which:codes[key], bubbles:true
+        }));
+      };
+
+      const center = () => {
+        const r = joy.getBoundingClientRect();
+        return { x: r.left + r.width/2, y: r.top + r.height/2, rad: r.width * 0.48 };
+      };
+
+      const move = (x, y) => {
+        const c = center();
+        let dx = x - c.x, dy = y - c.y;
+        const dist = Math.hypot(dx, dy);
+        if (dist > c.rad) { dx = dx/dist * c.rad; dy = dy/dist * c.rad; }
+        knob.style.transform = `translate(${dx}px, ${dy}px)`;
+
+        const nx = dx/c.rad, ny = dy/c.rad;
+        const want = { L:nx<-TH, R:nx>TH, U:ny<-TH, D:ny>TH };
+        ['L','R','U','D'].forEach(dir => {
+          const key = {L:'ArrowLeft',R:'ArrowRight',U:'ArrowUp',D:'ArrowDown'}[dir];
+          if (want[dir] && !state[dir]) send(key, 'keydown');
+          if (!want[dir] && state[dir]) send(key, 'keyup');
+        });
+        state = want;
+      };
+
+      const release = () => {
+        knob.style.transform = 'translate(0,0)';
+        ['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].forEach(k => send(k, 'keyup'));
+        state = {L:false,R:false,U:false,D:false};
+      };
+
+      joy.addEventListener('touchstart', e => { e.preventDefault(); move(e.touches[0].clientX, e.touches[0].clientY); }, {passive:false});
+      joy.addEventListener('touchmove', e => { e.preventDefault(); move(e.touches[0].clientX, e.touches[0].clientY); }, {passive:false});
+      joy.addEventListener('touchend', release);
+      joy.addEventListener('touchcancel', release);
+    })();
   </script>
 </body>
 </html>
