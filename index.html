@@ -5,8 +5,10 @@
   <title>Rescue Riders 16:9</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <style>
-    html,body { margin:0; padding:0; background:#000; height:100%; overflow:hidden; }
-    body { display:flex; align-items:center; justify-content:center; flex-direction:column; }
+    html,body {
+      margin:0; padding:0; background:#000; height:100%; overflow:hidden;
+      display:flex; justify-content:center; align-items:center;
+    }
 
     /* spodná vrstva – vyplní celý displej (16:9 obrázky sa "covernú" bez deformácie) */
     #bg-cover {
@@ -17,18 +19,18 @@
       background:#000;
     }
 
-    /* kontajner pre Phaser canvas 16:9 */
+    /* kontajner pre Phaser canvas – 16:9, vždy sa zmestí (letterbox) */
     #game-container {
       position:relative;
-      width:100%;
-      max-width:1280px;
-      aspect-ratio:16/9;
+      width:100vmin;
+      height:calc(100vmin * 9 / 16);
+      max-width:100vw;
+      max-height:100vh;
       z-index:1;
     }
     #game-container canvas {
       width:100%; height:100%;
       display:block;
-      aspect-ratio:16/9;
     }
 
     /* blokátor pre portrait na mobile */
@@ -90,7 +92,7 @@
 
   <!-- modal s nickom (krok 1) -->
   <div id="nick">
-    <h2>🌊 Rescue Riders</h2>
+    <h2>Rescue Riders</h2>
     <p>Enter your nickname:</p>
     <input id="n" maxlength="12" placeholder="Your name" autofocus>
     <br><button id="go">Start</button>
@@ -112,8 +114,7 @@
     const inp  = document.getElementById('n');
     const go   = document.getElementById('go');
 
-    /* 1) Kým je zobrazený nick modal, blokujeme SPACE/ENTER,
-          aby sa nespustilo Phaser intro pod modalom */
+    /* 1) Kým je zobrazený nick modal, blokujeme SPACE/ENTER */
     let blockKeys = true;
     function keyBlocker(e){
       if (!blockKeys) return;
@@ -130,7 +131,7 @@
       ['pointerdown','touchstart','click','keydown'].forEach(ev=>document.addEventListener(ev,fire,{once:true,passive:true}));
     })();
 
-    /* 3) Štart hry po zadaní nicku (nastaví BG na hero screen a spustí Phaser) */
+    /* 3) Štart hry po zadaní nicku */
     function startGame() {
       const v = inp.value.trim();
       if(!v){ alert('Please enter your nickname'); return; }
@@ -138,7 +139,6 @@
       nick.style.display = 'none';
       blockKeys = false;
 
-      // po nicku – titulný screen s “Press SPACE…”
       const bg = document.getElementById('bg-cover');
       if (bg) bg.src = 'assets/hero_screen_1280x720.png';
 
@@ -146,7 +146,6 @@
 
       if (window.startRescueRiders) window.startRescueRiders();
 
-      // zapneme joystick pre touch + landscape
       const joy = document.getElementById('joy');
       if ('ontouchstart' in window && window.innerWidth > window.innerHeight) {
         joy.style.display = 'block';
@@ -157,14 +156,14 @@
     go.addEventListener('click', startGame);
     inp.addEventListener('keydown', e => { if(e.key === 'Enter') startGame(); });
 
-    /* 4) Joystick: posiela šípky ako KeyboardEvent (ArrowLeft/Up/Right/Down) */
+    /* 4) Joystick: posiela šípky ako KeyboardEvent */
     (function(){
       const joy  = document.getElementById('joy');
       const knob = document.getElementById('joy-stick');
       if(!joy) return;
 
       let state={L:false,R:false,U:false,D:false};
-      const TH=0.20; // mŕtva zóna
+      const TH=0.20;
 
       const send=(key,type)=>{
         const m={ArrowLeft:37,ArrowUp:38,ArrowRight:39,ArrowDown:40};
