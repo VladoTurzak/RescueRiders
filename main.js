@@ -175,26 +175,52 @@ function create() {
   this.physics.add.overlap(this.player, this.swimmers, rescueSwimmer, null, this);
   this.physics.add.collider(this.player, this.crooks,  catchCrook,   null, this);
 
-  const txt = {fontSize:'22px', color:'#fff', fontStyle:'bold', fontFamily:'Arial',
-               shadow:{offsetX:1, offsetY:1, color:'#000', blur:3}};
-  this.missionLabel = this.add.text(30, 22, `MISSION ${this.currentMission+1}`, txt);
-  this.scoreLabel   = this.add.text(GAME_WIDTH/2-60, 22, `SCORE 0`, txt);
-  this.timerLabel   = this.add.text(GAME_WIDTH-150, 22, `${m.time}s`, txt);
-  this.goalLabel    = this.add.text(25, 65, `Rescue ${m.rescued} + Catch ${m.caught}`,
-                      {fontSize:'18px', color:'#003366', fontStyle:'bold', fontFamily:'Arial'});
+  // 🔹 HUD texty s emoji
+  const txt = {
+    fontSize:'22px',
+    color:'#fff',
+    fontStyle:'bold',
+    fontFamily:'Arial',
+    shadow:{offsetX:1, offsetY:1, color:'#000', blur:3}
+  };
+
+  this.missionLabel = this.add.text(
+    30, 22,
+    `⭐ MISSION ${this.currentMission+1}`,
+    txt
+  );
+  this.scoreLabel   = this.add.text(
+    GAME_WIDTH/2-60, 22,
+    `💯 SCORE 0`,
+    txt
+  );
+  this.timerLabel   = this.add.text(
+    GAME_WIDTH-150, 22,
+    `🕒 ${m.time}s`,
+    txt
+  );
+  this.goalLabel    = this.add.text(
+    25, 65,
+    `🎯 Rescue ${m.rescued} + Catch ${m.caught}`,
+    {fontSize:'18px', color:'#003366', fontStyle:'bold', fontFamily:'Arial'}
+  );
 
   this.timeLeft = m.time;
   this.timerEvent = this.time.addEvent({
-    delay:1000, loop:true, callback:()=>{
+    delay:1000,
+    loop:true,
+    callback: () => {
       this.timeLeft--; 
-      this.timerLabel.setText(`${this.timeLeft}s`);
-      if(this.timeLeft<=0) failMission.call(this);
+      this.timerLabel.setText(`🕒 ${this.timeLeft}s`);
+      if (this.timeLeft <= 0) failMission.call(this);
     }
   });
 
-  this.score=0; this.rescued=0; this.caught=0;
+  this.score = 0;
+  this.rescued = 0;
+  this.caught = 0;
 
-  const onHard=(e)=>{ if(!e.repeat) hardReset(this); };
+  const onHard = (e) => { if (!e.repeat) hardReset(this); };
   this.keys.r.on('down', onHard);
   this.keys.esc.on('down', onHard);
 }
@@ -234,14 +260,14 @@ function popupScore(scene,x,y,text){
 
 function rescueSwimmer(player,swimmer){
   swimmer.destroy(); this.score+=10; this.rescued++;
-  this.scoreLabel.setText(`SCORE ${this.score}`);
+  this.scoreLabel.setText(`💯 SCORE ${this.score}`);
   this.sound.play('swimmer_spawn',{volume:0.6});
   showSplash.call(this,swimmer.x,swimmer.y); popupScore(this,swimmer.x,swimmer.y,'+10');
   checkMission.call(this);
 }
 function catchCrook(player,crook){
   crook.destroy(); this.score+=30; this.caught++;
-  this.scoreLabel.setText(`SCORE ${this.score}`);
+  this.scoreLabel.setText(`💯 SCORE ${this.score}`);
   this.sound.play('crook_spawn',{volume:0.6});
   showSplash.call(this,crook.x,crook.y); popupScore(this,crook.x,crook.y,'+30');
   checkMission.call(this);
@@ -275,7 +301,7 @@ function spawnShark(dir='right'){
 function hitShark(player,shark){
   shark.destroy();
   this.score=Math.max(0,this.score-30);
-  this.scoreLabel.setText(`SCORE ${this.score}`);
+  this.scoreLabel.setText(`💯 SCORE ${this.score}`);
   const flash=this.add.rectangle(GAME_WIDTH/2,GAME_HEIGHT/2,GAME_WIDTH,GAME_HEIGHT,0xff0000,0.3).setDepth(999);
   this.tweens.add({targets:flash,alpha:0,duration:400,onComplete:()=>flash.destroy()});
   showSplash.call(this,player.x,player.y); popupScore(this,player.x,player.y,'-30');
@@ -284,7 +310,10 @@ function hitShark(player,shark){
 /* === WIN / FAIL === */
 function checkMission(){
   const m=MISSIONS[this.currentMission];
-  this.goalLabel.setText(`Rescue ${m.rescued} (${this.rescued}/${m.rescued}) + Catch ${m.caught} (${this.caught}/${m.caught})`);
+  this.goalLabel.setText(
+    `🎯 Rescue ${m.rescued} (${this.rescued}/${m.rescued}) + ` +
+    `Catch ${m.caught} (${this.caught}/${m.caught})`
+  );
   if(this.rescued>=m.rescued && this.caught>=m.caught) missionComplete.call(this);
 }
 function missionComplete(){
