@@ -156,7 +156,17 @@ function create() {
     this.sound.stopAll();
     playLoop(this, 'intro_theme', { loop: true, volume: 0.7 });
 
-    const start = () => this.scene.restart({ currentMission: 0, isIntro: false, score: 0 });
+    const start = () => {
+  // uloženie mena
+  const input = document.getElementById('player-name');
+  if (input && input.value.trim().length > 0) {
+    localStorage.setItem('rr_name', input.value.trim());
+  }
+
+  // štart hry
+  this.scene.restart({ currentMission: 0, isIntro: false, score: 0 });
+};
+
     this.input.keyboard.once('keydown-SPACE', start);
     this.input.keyboard.once('keydown-ENTER', start);
     this.input.once('pointerdown', start);
@@ -490,10 +500,13 @@ function saveAndShowLeaderboard() {
   const centerX = GAME_WIDTH / 2;
   const centerY = GAME_HEIGHT / 2;
 
-  const border = this.add.rectangle(centerX, centerY, w + 6, h + 6, 0xffffff, 0.9)
-    .setDepth(1199);
-  const panel = this.add.rectangle(centerX, centerY, w, h, 0x000000, 0.8)
-    .setDepth(1200);
+  // Jemný priehľadný panel (transparent, len 25 % tmavšie)
+const panel = this.add.rectangle(centerX, centerY, w, h, 0x000000, 0.25)
+  .setDepth(1200);
+
+// Jemný obrys okolo (voliteľné – môžeš nechať aj úplne bez)
+const border = this.add.rectangle(centerX, centerY, w + 4, h + 4, 0xffffff, 0.15)
+  .setDepth(1199);
 
   const title = this.add.text(
     centerX,
