@@ -10,7 +10,7 @@
       display:flex; justify-content:center; align-items:center;
     }
 
-    /* BG – vyplní CELÝ screen (dynamicky s UI) */
+    /* BG – vyplní CELÝ screen */
     #bg-cover {
       position:fixed; inset:0;
       width:100vw; height:100dvh;
@@ -46,23 +46,42 @@
       #phaser-wrapper, #nick { display:none !important; }
     }
 
-    /* Nick modal */
+    /* --- ⭐ NEW SMALLER NICKNAME MODAL --- */
     #nick {
-      position:fixed; left:50%; top:50%;
+      position:fixed;
+      left:50%;
+      top:60%; /* nižšie → nech neruší intro hero */
       transform:translate(-50%,-50%);
-      background:rgba(0,0,0,0.9); padding:28px 40px; border-radius:12px;
-      color:#fff; text-align:center; font-family:Arial, sans-serif;
-      z-index:10000; width:min(92vw,520px);
-      box-shadow:0 10px 30px rgba(0,0,0,.5);
+      background:rgba(0,0,0,0.55); /* jemný transparent */
+      padding:18px 24px; /* menšie */
+      border-radius:14px;
+      color:#fff;
+      text-align:center;
+      font-family:Arial, sans-serif;
+      z-index:10000;
+      width:min(80vw,360px); /* výrazne menšie */
+      box-shadow:0 8px 22px rgba(0,0,0,.45);
+      backdrop-filter:blur(4px); /* moderný glass efekt */
     }
-    #nick h2 { margin:0 0 10px; color:#ffcc00; font-weight:800; letter-spacing:.3px; }
-    #nick p { margin:8px 0 12px; opacity:.9; }
-    #nick input { 
-      padding:12px 14px; border:none; border-radius:10px; width:100%; 
-      text-align:center; font-size:16px; outline:none; background:#333; color:#fff;
+    #nick h2 {
+      margin:0 0 6px;
+      color:#ffcc00;
+      font-weight:800;
+      font-size:20px;
+      letter-spacing:.3px;
     }
-    #nick button { 
-      margin-top:12px; padding:12px 22px; border:none; border-radius:10px; 
+    #nick p {
+      margin:4px 0 10px;
+      opacity:.9;
+      font-size:14px;
+    }
+    #nick input {
+      padding:12px 14px; border:none; border-radius:10px; width:100%;
+      text-align:center; font-size:16px; outline:none;
+      background:#333; color:#fff;
+    }
+    #nick button {
+      margin-top:12px; padding:12px 22px; border:none; border-radius:10px;
       background:#ffcc00; font-weight:800; cursor:pointer; width:100%;
     }
 
@@ -74,9 +93,9 @@
       touch-action:none; display:none;
       z-index:99999;
     }
-    #joy-base { 
-      position:absolute; inset:0; border-radius:50%; 
-      background:rgba(255,255,255,.15); border:2px solid rgba(255,255,255,.4); 
+    #joy-base {
+      position:absolute; inset:0; border-radius:50%;
+      background:rgba(255,255,255,.15); border:2px solid rgba(255,255,255,.4);
     }
     #joy-stick {
       position:absolute; width:var(--knob); height:var(--knob); border-radius:50%;
@@ -94,7 +113,7 @@
     <div><h2>Rotate your device</h2><p>Playable only in landscape</p></div>
   </div>
 
-  <!-- Nick modal -->
+  <!-- Nick modal (updated) -->
   <div id="nick">
     <h2>Rescue Riders</h2>
     <p>Enter your nickname:</p>
@@ -137,7 +156,6 @@
   const fire = () => {
     if (fired) return;
     fired = true;
-    // označ, že už prebehlo user gesto (pre ensureAudio)
     window._rrUserGesture = true;
     document.dispatchEvent(new Event('rr-user-gesture'));
   };
@@ -155,7 +173,6 @@
 
       document.getElementById('bg-cover').src = 'assets/hero_screen_1280x720.png';
 
-      // Dlhší delay – čaká na Phaser + DOM
       setTimeout(() => {
         document.dispatchEvent(new Event('rr-user-gesture'));
         if (window.startRescueRiders) {
@@ -163,11 +180,11 @@
         }
       }, 800);
 
-      // Joystick len na mobile landscape
       if ('ontouchstart' in window && window.innerWidth > window.innerHeight) {
         joy.style.display = 'block';
       }
     }
+
     go.addEventListener('click', startGame);
     inp.addEventListener('keydown', e => { if (e.key === 'Enter') startGame(); });
 
@@ -217,7 +234,7 @@
         state = {L:false, R:false, U:false, D:false};
       };
 
-      joy.addEventListener('touchstart', e => { e.preventDefault(); move(e.changedTouches[0].clientX, e.changedTouches[0].clientY); }, {passive: false});
+      joy.addEventListener('touchstart', e => { e.preventDefault(); move(e.changedTouches[0].clientX, e.changedTouches[0].clientX); }, {passive: false});
       joy.addEventListener('touchmove', e => { e.preventDefault(); move(e.changedTouches[0].clientX, e.changedTouches[0].clientY); }, {passive: false});
       joy.addEventListener('touchend', release, {passive: false});
       joy.addEventListener('touchcancel', release, {passive: false});
