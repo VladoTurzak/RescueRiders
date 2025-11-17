@@ -1,4 +1,5 @@
 // Rescue Riders — FINAL: 16:9, emoji HUD, leaderboard, Shark A/B logika
+
 const GAME_WIDTH = 1280, GAME_HEIGHT = 720;
 const MainScene = { key: 'main', preload, create, update, init };
 
@@ -56,48 +57,33 @@ window.addEventListener('orientationchange', () => setTimeout(handleResize, 300)
 /* === HELPERS === */
 function ensureAudio(scene) {
   if (ensureAudio._done) return;
-
   const resume = () => {
-    try { scene.sound.unlock(); } catch (e) {}
+    try { scene.sound.unlock(); } catch (e) { }
     try {
       const ctx = scene.sound.context;
       if (ctx && ctx.state !== 'running') ctx.resume();
-    } catch (e) {}
+    } catch (e) { }
     ensureAudio._done = true;
   };
-
-  // Dokument – vždy safe, aj keď Phaser input ešte nie je ready
   ['pointerdown', 'touchstart', 'click', 'keydown'].forEach(ev => {
-    try {
-      document.addEventListener(ev, resume, { once: true });
-    } catch (e) {}
+    document.addEventListener(ev, resume, { once: true });
   });
-
-  // Phaser input – môže byť undefined, preto opatrne
-  try {
-    if (scene.input) {
-      scene.input.once('pointerdown', resume);
-      if (scene.input.keyboard) {
-        scene.input.keyboard.once('keydown', resume);
-      }
-    }
-  } catch (e) {
-    // ignorujeme, hlavné sú document eventy
-  }
+  scene.input.once('pointerdown', resume);
+  scene.input.keyboard.once('keydown', resume);
 }
 
 function playLoop(scene, key, cfg) {
   ensureAudio(scene);
-  try { scene.sound.play(key, cfg); } catch (e) {}
+  try { scene.sound.play(key, cfg); } catch (e) { }
 }
 
 function hardReset(sceneCtx) {
   try {
     sceneCtx.sound.stopAll();
     if (sceneCtx.jetskiSound) sceneCtx.jetskiSound.stop();
-  } catch (e) {}
+  } catch (e) { }
   setTimeout(() => {
-    try { game.destroy(true); } catch (e) {}
+    try { game.destroy(true); } catch (e) { }
     game = null;
     window.startRescueRiders();
   }, 40);
@@ -105,18 +91,20 @@ function hardReset(sceneCtx) {
 
 /* === DATA === */
 const MISSIONS = [
-  { rescued: 10, caught: 3,  time: 60, swimmerDelay: 1500, crookDelay: 7000 },
-  { rescued: 12, caught: 5,  time: 55, swimmerDelay: 1400, crookDelay: 6000 },
-  { rescued: 15, caught: 8,  time: 50, swimmerDelay: 1200, crookDelay: 4000 },
+  { rescued: 10, caught: 3, time: 60, swimmerDelay: 1500, crookDelay: 7000 },
+  { rescued: 12, caught: 5, time: 55, swimmerDelay: 1400, crookDelay: 6000 },
+  { rescued: 15, caught: 8, time: 50, swimmerDelay: 1200, crookDelay: 4000 },
   { rescued: 18, caught: 10, time: 45, swimmerDelay: 1100, crookDelay: 3000 },
-  { rescued: 20, caught: 14, time: 40, swimmerDelay: 1000, crookDelay: 2000 } // misia 5
+  { rescued: 20, caught: 14, time: 40, swimmerDelay: 1000, crookDelay: 2000 }
 ];
 
 /* === SCÉNA === */
 function init(d) {
   this.currentMission = d?.currentMission ?? 0;
-  this.isIntro        = d?.isIntro ?? false;
-  this.score          = d?.score ?? 0; // globálne skóre medzi misiami
+  this.isIntro = d?.isIntro ?? false;
+
+  // globálne skóre sa prenáša medzi misiami
+  this.score = d?.score ?? 0;
 }
 
 function preload() {
@@ -148,8 +136,8 @@ function create() {
   this.keys = this.input.keyboard.addKeys({
     space: Phaser.Input.Keyboard.KeyCodes.SPACE,
     enter: Phaser.Input.Keyboard.KeyCodes.ENTER,
-    esc:   Phaser.Input.Keyboard.KeyCodes.ESC,
-    r:     Phaser.Input.Keyboard.KeyCodes.R
+    esc: Phaser.Input.Keyboard.KeyCodes.ESC,
+    r: Phaser.Input.Keyboard.KeyCodes.R
   });
 
   this.scale.refresh();
@@ -173,13 +161,12 @@ function create() {
     this.sound.stopAll();
     playLoop(this, 'intro_theme', { loop: true, volume: 0.7 });
 
+    // ⬇️ sem dopĺňam uloženie mena pred štartom
     const start = () => {
-      // uloženie mena
       const input = document.getElementById('player-name');
       if (input && input.value.trim().length > 0) {
         localStorage.setItem('rr_name', input.value.trim());
       }
-      // štart hry
       this.scene.restart({ currentMission: 0, isIntro: false, score: 0 });
     };
 
@@ -197,7 +184,7 @@ function create() {
   if (bg) bg.src = `assets/bg${this.currentMission + 1}_1280x720.png`;
 
   this.jetskiSound = this.sound.add('jetski_loop', { loop: true, volume: 0 });
-  try { this.jetskiSound.play(); } catch (e) {}
+  try { this.jetskiSound.play(); } catch (e) { }
 
   this.isFemale = Math.random() > 0.5;
   const tex = this.isFemale ? 'jetski_f' : 'jetski_m';
@@ -208,8 +195,9 @@ function create() {
   this.cursors = this.input.keyboard.createCursorKeys();
 
   const m = MISSIONS[this.currentMission];
+
   this.swimmers = this.physics.add.group();
-  this.crooks   = this.physics.add.group();
+  this.crooks = this.physics.add.group();
 
   this.time.addEvent({
     delay: m.swimmerDelay,
@@ -253,7 +241,7 @@ function create() {
 
   // Player vs swimmers & crooks
   this.physics.add.overlap(this.player, this.swimmers, rescueSwimmer, null, this);
-  this.physics.add.collider(this.player, this.crooks,   catchCrook,   null, this);
+  this.physics.add.collider(this.player, this.crooks, catchCrook, null, this);
 
   // 🔹 HUD
   const txt = {
@@ -298,7 +286,7 @@ function create() {
 
   // per-misia counters (len pre cieľ), skóre je globálne
   this.rescued = 0;
-  this.caught  = 0;
+  this.caught = 0;
 
   const onHard = (e) => { if (!e.repeat) hardReset(this); };
   this.keys.r.on('down', onHard);
@@ -310,7 +298,7 @@ function update() {
 
   const moving =
     this.cursors.left.isDown || this.cursors.right.isDown ||
-    this.cursors.up.isDown   || this.cursors.down.isDown;
+    this.cursors.up.isDown || this.cursors.down.isDown;
 
   if (this.jetskiSound) {
     const target = moving ? 0.55 : 0.0;
@@ -389,12 +377,12 @@ function spawnCrook() {
   const y = Phaser.Math.Between(90, GAME_HEIGHT - 90);
   let x, v, tx;
   if (side) {
-    x  = -60;
-    v  = Phaser.Math.Between(90, 160);
+    x = -60;
+    v = Phaser.Math.Between(90, 160);
     tx = 'crook';
   } else {
-    x  = GAME_WIDTH + 60;
-    v  = Phaser.Math.Between(-160, -90);
+    x = GAME_WIDTH + 60;
+    v = Phaser.Math.Between(-160, -90);
     tx = 'crook_left';
   }
   const c = this.crooks.create(x, y, tx);
@@ -406,15 +394,17 @@ function spawnCrook() {
 function spawnShark(dir = 'right') {
   const y = Phaser.Math.Between(110, GAME_HEIGHT - 110);
   let x, v, tx;
+
   if (dir === 'right') {
-    x  = GAME_WIDTH + 140;
-    v  = Phaser.Math.Between(-260, -210);
-    tx = 'shark';        // Shark A
+    x = GAME_WIDTH + 140;
+    v = Phaser.Math.Between(-260, -210);
+    tx = 'shark';            // Shark A
   } else {
-    x  = -140;
-    v  = Phaser.Math.Between(210, 260);
-    tx = 'shark_right';  // Shark B
+    x = -140;
+    v = Phaser.Math.Between(210, 260);
+    tx = 'shark_right';      // Shark B
   }
+
   const s = this.sharks.create(x, y, tx);
   s.setVelocity(v, 0).setImmovable(true).setSize(100, 60);
   this.sound.play('shark_spawn', { volume: 0.8 });
@@ -429,10 +419,11 @@ function spawnShark(dir = 'right') {
 }
 
 /* === SHARK LOGIKA === */
+
 // 🦈 Shark A (sprava -> doľava, texture 'shark'): v misii 4 & 5 zožerie swimmera a odpočíta 1 rescued
 function sharkHitSwimmer(shark, swimmer) {
-  if (shark.texture.key !== 'shark') return; // len Shark A
-  if (this.currentMission < 3) return;       // misie 4 a 5 (index 3,4)
+  if (shark.texture.key !== 'shark') return;          // len Shark A
+  if (this.currentMission < 3) return;                // misie 4 a 5 (index 3,4)
 
   const x = swimmer.x;
   const y = swimmer.y;
@@ -445,6 +436,7 @@ function sharkHitSwimmer(shark, swimmer) {
   showSplash.call(this, x, y);
   popupScore(this, x, y, '-1 rescued');
 
+  // aktualizuj cieľ
   const m = MISSIONS[this.currentMission];
   this.goalLabel.setText(
     `🎯 Rescue ${m.rescued} (${this.rescued}/${m.rescued}) + ` +
@@ -454,8 +446,8 @@ function sharkHitSwimmer(shark, swimmer) {
 
 // 🦈 Shark B (zľava -> doprava, texture 'shark_right'): iba misia 5, kontakt s hráčom = FAIL
 function sharkBHitPlayer(player, shark) {
-  if (shark.texture.key !== 'shark_right') return; // len Shark B
-  if (this.currentMission !== 4) return;           // len misia 5 (index 4)
+  if (shark.texture.key !== 'shark_right') return;  // len Shark B
+  if (this.currentMission !== 4) return;            // len misia 5 (index 4)
 
   const x = player.x;
   const y = player.y;
@@ -476,6 +468,7 @@ function sharkBHitPlayer(player, shark) {
 
   showSplash.call(this, x, y);
   popupScore(this, x, y, 'FAIL');
+
   failMission.call(this);
 }
 
@@ -491,7 +484,7 @@ function saveAndShowLeaderboard() {
   }
 
   const nameRaw = (localStorage.getItem('rr_name') || 'Player').trim();
-  const name    = nameRaw || 'Player';
+  const name = nameRaw || 'Player';
 
   board.push({
     name,
@@ -504,17 +497,17 @@ function saveAndShowLeaderboard() {
 
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(board));
-  } catch (e) {}
+  } catch (e) { }
 
   const w = 520, h = 380;
   const centerX = GAME_WIDTH / 2;
   const centerY = GAME_HEIGHT / 2;
 
-  // jemný, priehľadný panel
+  // ⬇️ tu je jediné vizuálne „odľahčenie“: jemne priesvitné pozadie
+  const border = this.add.rectangle(centerX, centerY, w + 6, h + 6, 0xffffff, 0.15)
+    .setDepth(1199);
   const panel = this.add.rectangle(centerX, centerY, w, h, 0x000000, 0.25)
     .setDepth(1200);
-  const border = this.add.rectangle(centerX, centerY, w + 4, h + 4, 0xffffff, 0.15)
-    .setDepth(1199);
 
   const title = this.add.text(
     centerX,
@@ -583,6 +576,7 @@ function missionComplete() {
     this.input.keyboard.once('keydown-ENTER', next);
     this.input.once('pointerdown', next);
   } else {
+    // posledná misia → koniec hry + leaderboard
     playLoop(this, 'game_complete', { loop: true, volume: 0.7 });
     this.add.text(
       GAME_WIDTH / 2, GAME_HEIGHT - 100,
@@ -622,7 +616,7 @@ function failMission() {
   const retry = () => this.scene.restart({
     currentMission: this.currentMission,
     isIntro: false,
-    score: this.score
+    score: this.score // držíme globálne skóre
   });
 
   const t = this.add.text(
