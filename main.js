@@ -56,6 +56,7 @@ window.addEventListener('orientationchange', () => setTimeout(handleResize, 300)
 /* === HELPERS === */
 function ensureAudio(scene) {
   if (ensureAudio._done) return;
+
   const resume = () => {
     try { scene.sound.unlock(); } catch (e) {}
     try {
@@ -64,11 +65,25 @@ function ensureAudio(scene) {
     } catch (e) {}
     ensureAudio._done = true;
   };
+
+  // Dokument – vždy safe, aj keď Phaser input ešte nie je ready
   ['pointerdown', 'touchstart', 'click', 'keydown'].forEach(ev => {
-    document.addEventListener(ev, resume, { once: true });
+    try {
+      document.addEventListener(ev, resume, { once: true });
+    } catch (e) {}
   });
-  scene.input.once('pointerdown', resume);
-  scene.input.keyboard.once('keydown', resume);
+
+  // Phaser input – môže byť undefined, preto opatrne
+  try {
+    if (scene.input) {
+      scene.input.once('pointerdown', resume);
+      if (scene.input.keyboard) {
+        scene.input.keyboard.once('keydown', resume);
+      }
+    }
+  } catch (e) {
+    // ignorujeme, hlavné sú document eventy
+  }
 }
 
 function playLoop(scene, key, cfg) {
@@ -94,14 +109,14 @@ const MISSIONS = [
   { rescued: 12, caught: 5,  time: 55, swimmerDelay: 1400, crookDelay: 6000 },
   { rescued: 15, caught: 8,  time: 50, swimmerDelay: 1200, crookDelay: 4000 },
   { rescued: 18, caught: 10, time: 45, swimmerDelay: 1100, crookDelay: 3000 },
-  { rescued: 20, caught: 14, time: 40, swimmerDelay: 1000, crookDelay: 2000 }
+  { rescued: 20, caught: 14, time: 40, swimmerDelay: 1000, crookDelay: 2000 } // misia 5
 ];
 
 /* === SCÉNA === */
 function init(d) {
   this.currentMission = d?.currentMission ?? 0;
-  this.isIntro = d?.isIntro ?? false;
-  this.score = d?.score ?? 0; // globálne skóre medzi misiami
+  this.isIntro        = d?.isIntro ?? false;
+  this.score          = d?.score ?? 0; // globálne skóre medzi misiami
 }
 
 function preload() {
@@ -374,12 +389,12 @@ function spawnCrook() {
   const y = Phaser.Math.Between(90, GAME_HEIGHT - 90);
   let x, v, tx;
   if (side) {
-    x = -60;
-    v = Phaser.Math.Between(90, 160);
+    x  = -60;
+    v  = Phaser.Math.Between(90, 160);
     tx = 'crook';
   } else {
-    x = GAME_WIDTH + 60;
-    v = Phaser.Math.Between(-160, -90);
+    x  = GAME_WIDTH + 60;
+    v  = Phaser.Math.Between(-160, -90);
     tx = 'crook_left';
   }
   const c = this.crooks.create(x, y, tx);
@@ -392,12 +407,12 @@ function spawnShark(dir = 'right') {
   const y = Phaser.Math.Between(110, GAME_HEIGHT - 110);
   let x, v, tx;
   if (dir === 'right') {
-    x = GAME_WIDTH + 140;
-    v = Phaser.Math.Between(-260, -210);
+    x  = GAME_WIDTH + 140;
+    v  = Phaser.Math.Between(-260, -210);
     tx = 'shark';        // Shark A
   } else {
-    x = -140;
-    v = Phaser.Math.Between(210, 260);
+    x  = -140;
+    v  = Phaser.Math.Between(210, 260);
     tx = 'shark_right';  // Shark B
   }
   const s = this.sharks.create(x, y, tx);
