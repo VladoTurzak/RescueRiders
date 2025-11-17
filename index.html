@@ -132,11 +132,18 @@
     }, true);
 
     // Audio gesture
-    (function(){
-      let fired = false;
-      const fire = () => { if (fired) return; fired = true; document.dispatchEvent(new Event('rr-user-gesture')); };
-      ['pointerdown','touchstart','click','keydown'].forEach(ev => document.addEventListener(ev, fire, {once:true, passive:true}));
-    })();
+(function(){
+  let fired = false;
+  const fire = () => {
+    if (fired) return;
+    fired = true;
+    // označ, že už prebehlo user gesto (pre ensureAudio)
+    window._rrUserGesture = true;
+    document.dispatchEvent(new Event('rr-user-gesture'));
+  };
+  ['pointerdown','touchstart','click','keydown']
+    .forEach(ev => document.addEventListener(ev, fire, {once:true, passive:true}));
+})();
 
     function startGame() {
       const v = inp.value.trim();
