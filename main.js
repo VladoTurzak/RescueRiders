@@ -71,12 +71,7 @@ function ensureAudio(scene) {
   scene.input.once('pointerdown', resume);
   scene.input.keyboard.once('keydown', resume);
 }
-
-function playLoop(scene, key, cfg) {
-  ensureAudio(scene);
-  try { scene.sound.play(key, cfg); } catch (e) { }
-}
-
+function playLoop(scene, key, cfg) { ensureAudio(scene); try { scene.sound.play(key, cfg); } catch (e) { } }
 function hardReset(sceneCtx) {
   try {
     sceneCtx.sound.stopAll();
@@ -161,15 +156,7 @@ function create() {
     this.sound.stopAll();
     playLoop(this, 'intro_theme', { loop: true, volume: 0.7 });
 
-    // ⬇️ sem dopĺňam uloženie mena pred štartom
-    const start = () => {
-      const input = document.getElementById('player-name');
-      if (input && input.value.trim().length > 0) {
-        localStorage.setItem('rr_name', input.value.trim());
-      }
-      this.scene.restart({ currentMission: 0, isIntro: false, score: 0 });
-    };
-
+    const start = () => this.scene.restart({ currentMission: 0, isIntro: false, score: 0 });
     this.input.keyboard.once('keydown-SPACE', start);
     this.input.keyboard.once('keydown-ENTER', start);
     this.input.once('pointerdown', start);
@@ -503,10 +490,9 @@ function saveAndShowLeaderboard() {
   const centerX = GAME_WIDTH / 2;
   const centerY = GAME_HEIGHT / 2;
 
-  // ⬇️ tu je jediné vizuálne „odľahčenie“: jemne priesvitné pozadie
-  const border = this.add.rectangle(centerX, centerY, w + 6, h + 6, 0xffffff, 0.15)
+  const border = this.add.rectangle(centerX, centerY, w + 6, h + 6, 0xffffff, 0.9)
     .setDepth(1199);
-  const panel = this.add.rectangle(centerX, centerY, w, h, 0x000000, 0.25)
+  const panel = this.add.rectangle(centerX, centerY, w, h, 0x000000, 0.8)
     .setDepth(1200);
 
   const title = this.add.text(
