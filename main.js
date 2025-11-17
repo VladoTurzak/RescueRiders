@@ -57,21 +57,51 @@ window.addEventListener('orientationchange', () => setTimeout(handleResize, 300)
 /* === HELPERS === */
 function ensureAudio(scene) {
   if (ensureAudio._done) return;
-  const resume = () => {
-    try { scene.sound.unlock(); } catch (e) { }
+
+  const doResume = () => {
+    try { scene.sound.unlock(); } catch (e) {}
     try {
       const ctx = scene.sound.context;
       if (ctx && ctx.state !== 'running') ctx.resume();
-    } catch (e) { }
+    } catch (e) {}
     ensureAudio._done = true;
   };
-  ['pointerdown', 'touchstart', 'click', 'keydown'].forEach(ev => {
-    document.addEventListener(ev, resume, { once: true });
-  });
-  scene.input.once('pointerdown', resume);
-  scene.input.keyboard.once('keydown', resume);
+
+  // 🔹 Ak už prebehlo gesto pred štartom hry (z HTML), odomkni hneď
+  if (window._rrUserGesture) {
+    doResume();
+    return;
+  }
+
+  const resume = () => {
+    if (ensureAudio._done) return;
+    doResume();
+  };
+
+  // Dokument – zachytí aj neskoršie tapy / klávesy + náš custom event
+  ['pointerdown', 'touchstart', 'click', 'keydown', 'rr-user-gesture']
+    .forEach(ev => {
+      try {
+        document.addEventListener(ev, resume, { once: true });
+      } catch (e) {}
+    });
+
+  // Phaser input – ako bonus, ak je input pripravený
+  try {
+    if (scene.input) {
+      scene.input.once('pointerdown', resume);
+      if (scene.input.keyboard) {
+        scene.input.keyboard.once('keydown', resume);
+      }
+    }
+  } catch (e) {}
 }
-function playLoop(scene, key, cfg) { ensureAudio(scene); try { scene.sound.play(key, cfg); } catch (e) { } }
+
+function playLoop(scene, key, cfg) {
+  ensureAudio(scene);
+  try { scene.sound.play(key, cfg); } catch (e) { }
+}
+
 function hardReset(sceneCtx) {
   try {
     sceneCtx.sound.stopAll();
@@ -470,7 +500,8 @@ function saveAndShowLeaderboard() {
     board = [];
   }
 
-  const nameRaw = (localStorage.getItem('rr_name') || 'Player').trim();
+  // môžeš sem kľudne neskôr prehodiť na 'rr_nickname', ak chceš ťahať z HTML inputu
+  const nameRaw = (localStorage.getItem('rr_nickname') || 'Player').trim();
   const name = nameRaw || 'Player';
 
   board.push({
@@ -490,9 +521,9 @@ function saveAndShowLeaderboard() {
   const centerX = GAME_WIDTH / 2;
   const centerY = GAME_HEIGHT / 2;
 
-  const border = this.add.rectangle(centerX, centerY, w + 6, h + 6, 0xffffff, 0.9)
+  const border = this.add.rectangle(centerX, centerY, w + 6, h + 6, 0xffffff, 0.15)
     .setDepth(1199);
-  const panel = this.add.rectangle(centerX, centerY, w, h, 0x000000, 0.8)
+  const panel = this.add.rectangle(centerX, centerY, w, h, 0x000000, 0.25)
     .setDepth(1200);
 
   const title = this.add.text(
