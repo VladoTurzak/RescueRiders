@@ -1,8 +1,6 @@
-// Rescue Riders — FINAL: 16:9, emoji HUD, leaderboard, Shark A/B logika
-
+// Rescue Riders — FINAL: 16:9, emoji HUD, leaderboard, Shark A/B logika + MOBILE AUDIO FIXED
 const GAME_WIDTH = 1280, GAME_HEIGHT = 720;
 const MainScene = { key: 'main', preload, create, update, init };
-
 const config = {
   type: Phaser.AUTO,
   parent: 'game-container',
@@ -17,19 +15,57 @@ const config = {
   audio: { noAudio: false, disableWebAudio: false },
   scene: [MainScene]
 };
-
 let game = null;
+
+// ========== AUDIO UNLOCK SYSTEM (100% mobile compatible) ==========
+let audioUnlocked = false;
+const pendingSounds = []; // {scene, key, cfg}
+
+function playWhenUnlocked(scene, key, cfg = {}) {
+  if (audioUnlocked && scene.sound) {
+    try { scene.sound.play(key, cfg); }
+    catch(e) { console.warn('Audio play failed:', e); }
+    return true;
+  } else {
+    pendingSounds.push({ scene, key, cfg });
+    return false;
+  }
+}
+
+function unlockAudioContext(scene) {
+  if (audioUnlocked) return;
+  audioUnlocked = true;
+
+  // Resume WebAudio context
+  try { scene.sound.unlock(); } catch(e) {}
+  const ctx = scene.sound?.context;
+  if (ctx && ctx.state !== 'running') {
+    ctx.resume().then(() => {
+      // Play all pending sounds
+      pendingSounds.forEach(s => {
+        if (s.scene && s.scene.sound) {
+          try { s.scene.sound.play(s.key, s.cfg); } catch(e) {}
+        }
+      });
+      pendingSounds.length = 0;
+    });
+  } else {
+    pendingSounds.forEach(s => {
+      if (s.scene && s.scene.sound) {
+        try { s.scene.sound.play(s.key, s.cfg); } catch(e) {}
+      }
+    });
+    pendingSounds.length = 0;
+  }
+}
 
 // SPUSŤ HRU S DELAY + REFRESH
 window.startRescueRiders = function () {
   if (game) return;
-
   setTimeout(() => {
     game = new Phaser.Game(config);
-
     setTimeout(() => {
       game.scene.start('main', { isIntro: true });
-
       setTimeout(() => {
         if (game && game.scale) game.scale.refresh();
       }, 200);
@@ -45,7 +81,6 @@ function handleResize() {
     if (game && game.scale) game.scale.refresh();
   }, 150);
 }
-
 if (window.visualViewport) {
   visualViewport.addEventListener('resize', handleResize);
   visualViewport.addEventListener('scroll', handleResize);
@@ -54,24 +89,6 @@ if (window.visualViewport) {
 }
 window.addEventListener('orientationchange', () => setTimeout(handleResize, 300));
 
-/* === HELPERS === */
-function ensureAudio(scene) {
-  if (ensureAudio._done) return;
-  const resume = () => {
-    try { scene.sound.unlock(); } catch (e) { }
-    try {
-      const ctx = scene.sound.context;
-      if (ctx && ctx.state !== 'running') ctx.resume();
-    } catch (e) { }
-    ensureAudio._done = true;
-  };
-  ['pointerdown', 'touchstart', 'click', 'keydown'].forEach(ev => {
-    document.addEventListener(ev, resume, { once: true });
-  });
-  scene.input.once('pointerdown', resume);
-  scene.input.keyboard.once('keydown', resume);
-}
-function playLoop(scene, key, cfg) { ensureAudio(scene); try { scene.sound.play(key, cfg); } catch (e) { } }
 function hardReset(sceneCtx) {
   try {
     sceneCtx.sound.stopAll();
@@ -80,6 +97,8 @@ function hardReset(sceneCtx) {
   setTimeout(() => {
     try { game.destroy(true); } catch (e) { }
     game = null;
+    audioUnlocked = false;
+    pendingSounds.length = 0;
     window.startRescueRiders();
   }, 40);
 }
@@ -97,7 +116,6 @@ const MISSIONS = [
 function init(d) {
   this.currentMission = d?.currentMission ?? 0;
   this.isIntro = d?.isIntro ?? false;
-
   // globálne skóre sa prenáša medzi misiami
   this.score = d?.score ?? 0;
 }
@@ -108,14 +126,12 @@ function preload() {
   for (let i = 1; i <= 5; i++) {
     this.load.image(`reward16_${i}`, `assets/reward${i}_1280x720.png`);
   }
-
   [
     'jetski_m', 'jetski_m_left', 'jetski_m_up', 'jetski_m_down',
     'jetski_f', 'jetski_f_left', 'jetski_f_up', 'jetski_f_down',
     'swimmer_m', 'swimmer_f', 'crook', 'crook_left', 'splash',
     'shark', 'shark_right'
   ].forEach(k => this.load.image(k, `assets/${k}.png`));
-
   [
     'intro_theme', 'mission_theme', 'reward_theme', 'fail_theme', 'game_complete',
     'jetski_loop', 'swimmer_spawn', 'crook_spawn', 'shark_spawn'
@@ -126,7 +142,13 @@ function preload() {
 }
 
 function create() {
-  ensureAudio(this);
+  // AUDIO UNLOCK - register first user gesture
+  const unlock = () => unlockAudioContext(this);
+  ['pointerdown', 'touchstart', 'click', 'keydown'].forEach(ev => {
+    document.addEventListener(ev, unlock, { once: true });
+  });
+  this.input.once('pointerdown', unlock);
+  this.input.keyboard.once('keydown', unlock);
 
   this.keys = this.input.keyboard.addKeys({
     space: Phaser.Input.Keyboard.KeyCodes.SPACE,
@@ -134,39 +156,33 @@ function create() {
     esc: Phaser.Input.Keyboard.KeyCodes.ESC,
     r: Phaser.Input.Keyboard.KeyCodes.R
   });
-
   this.scale.refresh();
 
   /* --- INTRO --- */
   if (this.isIntro) {
     const bg = document.getElementById('bg-cover');
     if (bg) bg.src = 'assets/hero_screen_1280x720.png';
-
     const hero = this.add.image(GAME_WIDTH / 2, GAME_HEIGHT / 2, 'hero16').setOrigin(0.5);
     const scale = Math.min(GAME_WIDTH / hero.width, GAME_HEIGHT / hero.height);
     hero.setScale(scale);
-
     const press = this.add.text(
       GAME_WIDTH / 2, GAME_HEIGHT - 60,
       'Press SPACE / ENTER or CLICK to start',
       { fontSize: '26px', color: '#fff', backgroundColor: '#000' }
     ).setOrigin(0.5);
     this.tweens.add({ targets: press, alpha: 0.2, yoyo: true, repeat: -1, duration: 800 });
-
-    this.sound.stopAll();
-    playLoop(this, 'intro_theme', { loop: true, volume: 0.7 });
-
+    
+    playWhenUnlocked(this, 'intro_theme', { loop: true, volume: 0.7 });
+    
     const start = () => {
-  // uloženie mena
-  const input = document.getElementById('player-name');
-  if (input && input.value.trim().length > 0) {
-    localStorage.setItem('rr_name', input.value.trim());
-  }
-
-  // štart hry
-  this.scene.restart({ currentMission: 0, isIntro: false, score: 0 });
-};
-
+      // uloženie mena
+      const input = document.getElementById('player-name');
+      if (input && input.value.trim().length > 0) {
+        localStorage.setItem('rr_name', input.value.trim());
+      }
+      // štart hry
+      this.scene.restart({ currentMission: 0, isIntro: false, score: 0 });
+    };
     this.input.keyboard.once('keydown-SPACE', start);
     this.input.keyboard.once('keydown-ENTER', start);
     this.input.once('pointerdown', start);
@@ -175,27 +191,26 @@ function create() {
 
   /* --- GAMEPLAY --- */
   this.sound.stopAll();
-  playLoop(this, 'mission_theme', { loop: true, volume: 0.7 });
-
+  playWhenUnlocked(this, 'mission_theme', { loop: true, volume: 0.7 });
+  
   const bg = document.getElementById('bg-cover');
   if (bg) bg.src = `assets/bg${this.currentMission + 1}_1280x720.png`;
-
+  
   this.jetskiSound = this.sound.add('jetski_loop', { loop: true, volume: 0 });
-  try { this.jetskiSound.play(); } catch (e) { }
-
+  if (audioUnlocked) try { this.jetskiSound.play(); } catch (e) { }
+  
   this.isFemale = Math.random() > 0.5;
   const tex = this.isFemale ? 'jetski_f' : 'jetski_m';
   this.player = this.physics.add.sprite(GAME_WIDTH / 2, GAME_HEIGHT / 2, tex)
     .setCollideWorldBounds(false)
     .setSize(100, 100);
-
+    
   this.cursors = this.input.keyboard.createCursorKeys();
-
   const m = MISSIONS[this.currentMission];
-
+  
   this.swimmers = this.physics.add.group();
   this.crooks = this.physics.add.group();
-
+  
   this.time.addEvent({
     delay: m.swimmerDelay,
     callback: spawnSwimmer,
@@ -208,18 +223,16 @@ function create() {
     callbackScope: this,
     loop: true
   });
-
+  
   // 🦈 Sharks (A od misie 4, B len v misii 5)
   if (this.currentMission >= 3) { // misie 4 a 5 (index 3,4)
     this.sharks = this.physics.add.group();
-
     // Shark A: sprava -> doľava (texture 'shark')
     this.time.addEvent({
       delay: 6000,
       callback: () => spawnShark.call(this, 'right'),
       loop: true
     });
-
     // Shark B: zľava -> doprava (texture 'shark_right'), iba v misii 5 (index 4)
     if (this.currentMission === 4) {
       this.time.addEvent({
@@ -227,19 +240,17 @@ function create() {
         callback: () => spawnShark.call(this, 'left'),
         loop: true
       });
-
       // deadly Shark B vs PLAYER
       this.physics.add.overlap(this.player, this.sharks, sharkBHitPlayer, null, this);
     }
-
     // Shark A vs SWIMMERS (misie 4 & 5)
     this.physics.add.overlap(this.sharks, this.swimmers, sharkHitSwimmer, null, this);
   }
-
+  
   // Player vs swimmers & crooks
   this.physics.add.overlap(this.player, this.swimmers, rescueSwimmer, null, this);
   this.physics.add.collider(this.player, this.crooks, catchCrook, null, this);
-
+  
   // 🔹 HUD
   const txt = {
     fontSize: '22px',
@@ -248,7 +259,6 @@ function create() {
     fontFamily: 'Arial',
     shadow: { offsetX: 1, offsetY: 1, color: '#000', blur: 3 }
   };
-
   this.missionLabel = this.add.text(
     30, 22,
     `⭐ MISSION ${this.currentMission + 1}`,
@@ -269,7 +279,7 @@ function create() {
     `🎯 Rescue ${m.rescued} + Catch ${m.caught}`,
     { fontSize: '18px', color: '#003366', fontStyle: 'bold', fontFamily: 'Arial' }
   );
-
+  
   this.timeLeft = m.time;
   this.timerEvent = this.time.addEvent({
     delay: 1000,
@@ -280,11 +290,11 @@ function create() {
       if (this.timeLeft <= 0) failMission.call(this);
     }
   });
-
+  
   // per-misia counters (len pre cieľ), skóre je globálne
   this.rescued = 0;
   this.caught = 0;
-
+  
   const onHard = (e) => { if (!e.repeat) hardReset(this); };
   this.keys.r.on('down', onHard);
   this.keys.esc.on('down', onHard);
@@ -292,16 +302,13 @@ function create() {
 
 function update() {
   if (!this.player || !this.cursors) return;
-
   const moving =
     this.cursors.left.isDown || this.cursors.right.isDown ||
     this.cursors.up.isDown || this.cursors.down.isDown;
-
   if (this.jetskiSound) {
     const target = moving ? 0.55 : 0.0;
     this.jetskiSound.volume += (target - this.jetskiSound.volume) * 0.08;
   }
-
   let vx = 0, vy = 0;
   if (this.cursors.left.isDown) {
     vx = -260;
@@ -317,9 +324,7 @@ function update() {
     vy = 260;
     this.player.setTexture(this.isFemale ? 'jetski_f_down' : 'jetski_m_down');
   }
-
   this.player.setVelocity(vx, vy);
-
   const hw = this.player.displayWidth / 2;
   const hh = this.player.displayHeight / 2;
   this.player.x = Phaser.Math.Clamp(this.player.x, hw, GAME_WIDTH - hw);
@@ -331,6 +336,7 @@ function showSplash(x, y) {
   const s = this.add.image(x, y, 'splash').setScale(0.7);
   this.tweens.add({ targets: s, alpha: 0, duration: 500, onComplete: () => s.destroy() });
 }
+
 function popupScore(scene, x, y, text) {
   const t = scene.add.text(
     x, y, text,
@@ -344,21 +350,23 @@ function rescueSwimmer(player, swimmer) {
   this.score += 10;
   this.rescued++;
   this.scoreLabel.setText(`💯 SCORE ${this.score}`);
-  this.sound.play('swimmer_spawn', { volume: 0.6 });
+  if (audioUnlocked) this.sound.play('swimmer_spawn', { volume: 0.6 });
   showSplash.call(this, swimmer.x, swimmer.y);
   popupScore(this, swimmer.x, swimmer.y, '+10');
   checkMission.call(this);
 }
+
 function catchCrook(player, crook) {
   crook.destroy();
   this.score += 30;
   this.caught++;
   this.scoreLabel.setText(`💯 SCORE ${this.score}`);
-  this.sound.play('crook_spawn', { volume: 0.6 });
+  if (audioUnlocked) this.sound.play('crook_spawn', { volume: 0.6 });
   showSplash.call(this, crook.x, crook.y);
   popupScore(this, crook.x, crook.y, '+30');
   checkMission.call(this);
 }
+
 function spawnSwimmer() {
   const x = Phaser.Math.Between(60, GAME_WIDTH - 60);
   const y = Phaser.Math.Between(60, GAME_HEIGHT - 60);
@@ -369,6 +377,7 @@ function spawnSwimmer() {
     Phaser.Math.Between(-45, 45)
   ).setBounce(1, 1).setSize(70, 70);
 }
+
 function spawnCrook() {
   const side = Phaser.Math.Between(0, 1);
   const y = Phaser.Math.Between(90, GAME_HEIGHT - 90);
@@ -387,24 +396,22 @@ function spawnCrook() {
 }
 
 // dir 'right' = sprava -> doľava (Shark A, texture 'shark')
-// dir 'left'  = zľava -> doprava (Shark B, texture 'shark_right')
+// dir 'left' = zľava -> doprava (Shark B, texture 'shark_right')
 function spawnShark(dir = 'right') {
   const y = Phaser.Math.Between(110, GAME_HEIGHT - 110);
   let x, v, tx;
-
   if (dir === 'right') {
     x = GAME_WIDTH + 140;
     v = Phaser.Math.Between(-260, -210);
-    tx = 'shark';            // Shark A
+    tx = 'shark'; // Shark A
   } else {
     x = -140;
     v = Phaser.Math.Between(210, 260);
-    tx = 'shark_right';      // Shark B
+    tx = 'shark_right'; // Shark B
   }
-
   const s = this.sharks.create(x, y, tx);
   s.setVelocity(v, 0).setImmovable(true).setSize(100, 60);
-  this.sound.play('shark_spawn', { volume: 0.8 });
+  if (audioUnlocked) this.sound.play('shark_spawn', { volume: 0.8 });
   this.tweens.add({
     targets: s,
     y: s.y + Phaser.Math.Between(-15, 15),
@@ -416,23 +423,18 @@ function spawnShark(dir = 'right') {
 }
 
 /* === SHARK LOGIKA === */
-
 // 🦈 Shark A (sprava -> doľava, texture 'shark'): v misii 4 & 5 zožerie swimmera a odpočíta 1 rescued
 function sharkHitSwimmer(shark, swimmer) {
-  if (shark.texture.key !== 'shark') return;          // len Shark A
-  if (this.currentMission < 3) return;                // misie 4 a 5 (index 3,4)
-
+  if (shark.texture.key !== 'shark') return; // len Shark A
+  if (this.currentMission < 3) return; // misie 4 a 5 (index 3,4)
   const x = swimmer.x;
   const y = swimmer.y;
   swimmer.destroy();
-
   if (this.rescued > 0) {
     this.rescued--;
   }
-
   showSplash.call(this, x, y);
   popupScore(this, x, y, '-1 rescued');
-
   // aktualizuj cieľ
   const m = MISSIONS[this.currentMission];
   this.goalLabel.setText(
@@ -443,29 +445,24 @@ function sharkHitSwimmer(shark, swimmer) {
 
 // 🦈 Shark B (zľava -> doprava, texture 'shark_right'): iba misia 5, kontakt s hráčom = FAIL
 function sharkBHitPlayer(player, shark) {
-  if (shark.texture.key !== 'shark_right') return;  // len Shark B
-  if (this.currentMission !== 4) return;            // len misia 5 (index 4)
-
+  if (shark.texture.key !== 'shark_right') return; // len Shark B
+  if (this.currentMission !== 4) return; // len misia 5 (index 4)
   const x = player.x;
   const y = player.y;
   shark.destroy();
-
   const flash = this.add.rectangle(
     GAME_WIDTH / 2, GAME_HEIGHT / 2,
     GAME_WIDTH, GAME_HEIGHT,
     0xff0000, 0.6
   ).setDepth(999);
-
   this.tweens.add({
     targets: flash,
     alpha: 0,
     duration: 500,
     onComplete: () => flash.destroy()
   });
-
   showSplash.call(this, x, y);
   popupScore(this, x, y, 'FAIL');
-
   failMission.call(this);
 }
 
@@ -479,42 +476,33 @@ function saveAndShowLeaderboard() {
   } catch (e) {
     board = [];
   }
-
   const nameRaw = (localStorage.getItem('rr_name') || 'Player').trim();
   const name = nameRaw || 'Player';
-
   board.push({
     name,
     score: this.score,
     date: new Date().toISOString()
   });
-
   board.sort((a, b) => b.score - a.score);
   board = board.slice(0, 10);
-
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(board));
   } catch (e) { }
-
   const w = 520, h = 380;
   const centerX = GAME_WIDTH / 2;
   const centerY = GAME_HEIGHT / 2;
-
   // Jemný priehľadný panel (transparent, len 25 % tmavšie)
-const panel = this.add.rectangle(centerX, centerY, w, h, 0x000000, 0.25)
-  .setDepth(1200);
-
-// Jemný obrys okolo (voliteľné – môžeš nechať aj úplne bez)
-const border = this.add.rectangle(centerX, centerY, w + 4, h + 4, 0xffffff, 0.15)
-  .setDepth(1199);
-
+  const panel = this.add.rectangle(centerX, centerY, w, h, 0x000000, 0.25)
+    .setDepth(1200);
+  // Jemný obrys okolo (voliteľné – môžeš nechať aj úplne bez)
+  const border = this.add.rectangle(centerX, centerY, w + 4, h + 4, 0xffffff, 0.15)
+    .setDepth(1199);
   const title = this.add.text(
     centerX,
     centerY - h / 2 + 40,
     '🏆 Leaderboard',
     { fontSize: '28px', color: '#ffff66', fontStyle: 'bold', fontFamily: 'Arial' }
   ).setOrigin(0.5).setDepth(1201);
-
   board.forEach((entry, idx) => {
     const y = centerY - h / 2 + 80 + idx * 26;
     const rank = idx + 1;
@@ -526,7 +514,6 @@ const border = this.add.rectangle(centerX, centerY, w + 4, h + 4, 0xffffff, 0.15
       { fontSize: '18px', color: '#ffffff', fontFamily: 'Arial' }
     ).setDepth(1201);
   });
-
   const hint = this.add.text(
     centerX,
     centerY + h / 2 - 30,
@@ -550,20 +537,17 @@ function missionComplete() {
   if (this.timerEvent) this.timerEvent.remove();
   this.physics.pause();
   this.sound.stopAll();
-  playLoop(this, 'reward_theme', { loop: true, volume: 0.7 });
-
+  playWhenUnlocked(this, 'reward_theme', { loop: true, volume: 0.7 });
   const rewardKey = `reward16_${this.currentMission + 1}`;
   const rw = this.add.image(GAME_WIDTH / 2, GAME_HEIGHT / 2, rewardKey)
     .setOrigin(0.5).setDepth(999);
   const sc = Math.min(GAME_WIDTH / rw.width, GAME_HEIGHT / rw.height);
   rw.setScale(sc);
-
   const next = () => this.scene.restart({
     currentMission: this.currentMission + 1,
     isIntro: false,
     score: this.score
   });
-
   if (this.currentMission < MISSIONS.length - 1) {
     const t = this.add.text(
       GAME_WIDTH / 2, GAME_HEIGHT - 60,
@@ -576,7 +560,7 @@ function missionComplete() {
     this.input.once('pointerdown', next);
   } else {
     // posledná misia → koniec hry + leaderboard
-    playLoop(this, 'game_complete', { loop: true, volume: 0.7 });
+    playWhenUnlocked(this, 'game_complete', { loop: true, volume: 0.7 });
     this.add.text(
       GAME_WIDTH / 2, GAME_HEIGHT - 100,
       'Game Complete!',
@@ -588,9 +572,7 @@ function missionComplete() {
       { fontSize: '24px', color: '#fff', backgroundColor: '#000' }
     ).setOrigin(0.5).setDepth(1000);
     this.tweens.add({ targets: r, alpha: 0.2, yoyo: true, repeat: -1, duration: 800 });
-
     saveAndShowLeaderboard.call(this);
-
     const h = (e) => {
       if (e.key === 'r' || e.key === 'R') {
         document.removeEventListener('keydown', h);
@@ -605,19 +587,16 @@ function failMission() {
   if (this.timerEvent) this.timerEvent.remove();
   this.physics.pause();
   this.sound.stopAll();
-  playLoop(this, 'fail_theme', { loop: true, volume: 0.7 });
-
+  playWhenUnlocked(this, 'fail_theme', { loop: true, volume: 0.7 });
   const img = this.add.image(GAME_WIDTH / 2, GAME_HEIGHT / 2, 'fail16')
     .setOrigin(0.5).setDepth(999);
   const sc = Math.min(GAME_WIDTH / img.width, GAME_HEIGHT / img.height);
   img.setScale(sc);
-
   const retry = () => this.scene.restart({
     currentMission: this.currentMission,
     isIntro: false,
     score: this.score // držíme globálne skóre
   });
-
   const t = this.add.text(
     GAME_WIDTH / 2, GAME_HEIGHT - 60,
     'Press SPACE / ENTER / CLICK to retry',
