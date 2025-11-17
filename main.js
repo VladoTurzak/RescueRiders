@@ -200,7 +200,7 @@ function create() {
   const bg = document.getElementById('bg-cover');
   if (bg) bg.src = `assets/bg${this.currentMission + 1}_1280x720.png`;
 
-  this.jetskiSound = this.sound.add('jetski_loop', { loop: true, volume: 0 });
+  this.jetskiSound = this.sound.add('jetski_loop', { loop: true, volume: 1.9 });
   try { this.jetskiSound.play(); } catch (e) { }
 
   this.isFemale = Math.random() > 0.5;
