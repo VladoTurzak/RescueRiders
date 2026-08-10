@@ -2,149 +2,243 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Rescue Riders — Play Now</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
-  <link rel="icon" type="image/x-icon" href="favicon.ico">
+  <title>Rescue Riders 16:9</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <style>
-    html, body { margin:0; padding:0; height:100%; overflow:hidden; background:#000; font-family:Arial,Helvetica,sans-serif; touch-action:none; -webkit-user-select:none; user-select:none; }
-    #game-container { width:100%; height:100%; display:none; position:relative; z-index:1; }
-    body { background:url('assets/hero_intro.png') center center / cover no-repeat; }
-    #nickname-form { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); background:rgba(0,0,0,0.78); color:#fff; padding:28px 36px; border-radius:14px; box-shadow:0 0 40px rgba(0,0,0,0.8); z-index:9999; text-align:center; min-width:290px; animation:fadein 0.9s ease; }
-    #nickname-form h2 { margin:0 0 6px; color:#ffcc00; letter-spacing:1px; }
-    #nickname-form input { width:80%; padding:10px; font-size:18px; border:none; border-radius:8px; text-align:center; }
-    #nickname-form button.start-btn { margin-top:14px; padding:10px 22px; font-size:18px; background:#ffcc00; color:#000; border:none; border-radius:8px; cursor:pointer; font-weight:bold; touch-action:manipulation; }
-    #nickname-form button.start-btn:hover { filter:brightness(1.08); }
-    .char-select { display:flex; justify-content:center; gap:16px; margin:12px 0 4px; }
-    .char-option { cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:5px; padding:8px 14px; border-radius:10px; border:2px solid transparent; transition:border 0.2s,background 0.2s; touch-action:manipulation; }
-    .char-option.selected { border:2px solid #ffcc00; background:rgba(255,204,0,0.18); }
-    .char-option img { width:52px; height:52px; object-fit:contain; image-rendering:pixelated; }
-    .char-option span { font-size:13px; color:#ccc; }
-    #loading-overlay { position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.92); z-index:99999; display:none; flex-direction:column; align-items:center; justify-content:center; }
-    #loading-overlay .load-logo { color:#ffcc00; font-size:26px; font-weight:bold; margin-bottom:18px; letter-spacing:1px; }
-    #loading-bar-wrap { width:260px; height:16px; background:#333; border-radius:10px; overflow:hidden; }
-    #loading-bar { height:100%; width:0%; background:linear-gradient(90deg,#ffcc00,#ff7700); border-radius:10px; transition:width 0.1s linear; }
-    #loading-text { margin-top:9px; color:#aaa; font-size:14px; }
-    @keyframes fadein { from{opacity:0; transform:translate(-50%,-44%);} to{opacity:1; transform:translate(-50%,-50%);} }
-  </style>
-  <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="mobile-web-app-capable" content="yes">
+    html,body {
+      margin:0; padding:0; background:#000; height:100%; overflow:hidden;
+      display:flex; justify-content:center; align-items:center;
+    }
 
+    /* BG – vyplní CELÝ screen */
+    #bg-cover {
+      position:fixed; inset:0;
+      width:100vw; height:100dvh;
+      object-fit:cover;
+      z-index:0; pointer-events:none;
+      background:#000;
+    }
+
+    /* Phaser wrapper */
+    #phaser-wrapper {
+      position:fixed; inset:0;
+      width:100vw; height:100dvh;
+      display:flex; justify-content:center; align-items:center;
+    }
+    #game-container {
+      position:relative;
+      width:100%; height:100%;
+      max-width:100vw; max-height:100dvh;
+    }
+    #game-container canvas {
+      display:block; image-rendering: pixelated;
+    }
+
+    /* Rotate block */
+    #rotate-block {
+      display:none; position:fixed; inset:0;
+      background:#000; color:#fff; z-index:99999;
+      align-items:center; justify-content:center; text-align:center;
+      font-family:Arial, sans-serif;
+    }
+    @media (orientation:portrait) and (pointer:coarse) {
+      #rotate-block { display:flex; }
+      #phaser-wrapper, #nick { display:none !important; }
+    }
+
+    /* --- ⭐ NEW SMALLER NICKNAME MODAL --- */
+    #nick {
+      position:fixed;
+      left:50%;
+      top:60%; /* nižšie → nech neruší intro hero */
+      transform:translate(-50%,-50%);
+      background:rgba(0,0,0,0.55); /* jemný transparent */
+      padding:18px 24px; /* menšie */
+      border-radius:14px;
+      color:#fff;
+      text-align:center;
+      font-family:Arial, sans-serif;
+      z-index:10000;
+      width:min(80vw,360px); /* výrazne menšie */
+      box-shadow:0 8px 22px rgba(0,0,0,.45);
+      backdrop-filter:blur(4px); /* moderný glass efekt */
+    }
+    #nick h2 {
+      margin:0 0 6px;
+      color:#ffcc00;
+      font-weight:800;
+      font-size:20px;
+      letter-spacing:.3px;
+    }
+    #nick p {
+      margin:4px 0 10px;
+      opacity:.9;
+      font-size:14px;
+    }
+    #nick input {
+      padding:12px 14px; border:none; border-radius:10px; width:100%;
+      text-align:center; font-size:16px; outline:none;
+      background:#333; color:#fff;
+    }
+    #nick button {
+      margin-top:12px; padding:12px 22px; border:none; border-radius:10px;
+      background:#ffcc00; font-weight:800; cursor:pointer; width:100%;
+    }
+
+    /* Joystick */
+    :root { --joy:min(24vmin,130px); --knob:calc(var(--joy)*.34); }
+    #joy {
+      position:fixed; bottom:5%; left:5%;
+      width:var(--joy); height:var(--joy);
+      touch-action:none; display:none;
+      z-index:99999;
+    }
+    #joy-base {
+      position:absolute; inset:0; border-radius:50%;
+      background:rgba(255,255,255,.15); border:2px solid rgba(255,255,255,.4);
+    }
+    #joy-stick {
+      position:absolute; width:var(--knob); height:var(--knob); border-radius:50%;
+      background:rgba(255,255,255,.95);
+      left:calc(50% - var(--knob)/2); top:calc(50% - var(--knob)/2);
+      box-shadow:0 0 12px rgba(0,0,0,.6);
+      transition:transform .08s linear;
+    }
+  </style>
 </head>
 <body>
-  <div id="nickname-form">
-    <h2>🌊 Rescue Riders</h2>
+  <img id="bg-cover" src="assets/hero_intro_1280x720.png" alt="background">
+  
+  <div id="rotate-block">
+    <div><h2>Rotate your device</h2><p>Playable only in landscape</p></div>
+  </div>
+
+  <!-- Nick modal (updated) -->
+  <div id="nick">
+    <h2>Rescue Riders</h2>
     <p>Enter your nickname:</p>
-    <input id="nickname" type="text" maxlength="12" placeholder="Your name" autofocus />
-    <p style="margin:14px 0 2px;color:#ffcc00;font-size:13px;font-weight:bold;">CHOOSE YOUR RIDER</p>
-    <div class="char-select">
-      <div class="char-option selected" id="char-male" onclick="selectChar('m')">
-        <img src="assets/jetski_m.png" alt="Male" />
-        <span>👦 Male</span>
-      </div>
-      <div class="char-option" id="char-female" onclick="selectChar('f')">
-        <img src="assets/jetski_f.png" alt="Female" />
-        <span>👧 Female</span>
-      </div>
-    </div>
-    <button class="start-btn" id="start-btn">🚀 Start Game</button>
+    <input id="n" maxlength="12" placeholder="Your name" autofocus>
+    <br><button id="go">Start</button>
   </div>
-  <div id="loading-overlay">
-    <div class="load-logo">🌊 Rescue Riders</div>
-    <div id="loading-bar-wrap"><div id="loading-bar"></div></div>
-    <div id="loading-text">Loading... 0%</div>
+
+  <!-- Phaser wrapper -->
+  <div id="phaser-wrapper">
+    <div id="game-container"></div>
   </div>
-  <div id="game-container"></div>
-  <!-- Firebase SDK (compat v10) -->
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-  <script src="firebase-config.js"></script>
-  <script>
-    // ── Online Leaderboard helpers ──────────────────────────────
-    (function() {
-      const cfg = window.RR_FIREBASE_CONFIG;
-      const configured = cfg && cfg.apiKey && !cfg.apiKey.startsWith('PASTE');
-      if (!configured) {
-        console.warn('[RR] Firebase not configured – leaderboard will use localStorage only.');
-        window.rrSaveScore = async () => {};
-        window.rrGetLeaderboard = async () => [];
-        return;
-      }
-      try {
-        firebase.initializeApp(cfg);
-        const db = firebase.firestore();
-        window.rrSaveScore = async (name, score) => {
-          try {
-            await db.collection('leaderboard').add({
-              name: String(name).slice(0, 20),
-              score: Number(score),
-              date: new Date().toISOString()
-            });
-          } catch(e) { console.warn('[RR] Score save failed:', e); }
-        };
-        window.rrGetLeaderboard = async () => {
-          try {
-            const snap = await db.collection('leaderboard')
-              .orderBy('score', 'desc').limit(20).get();
-            return snap.docs.map(d => d.data());
-          } catch(e) { console.warn('[RR] Leaderboard fetch failed:', e); return []; }
-        };
-        console.log('[RR] Firebase online leaderboard ready ✅');
-      } catch(e) {
-        console.warn('[RR] Firebase init failed:', e);
-        window.rrSaveScore = async () => {};
-        window.rrGetLeaderboard = async () => [];
-      }
-    })();
-    // ────────────────────────────────────────────────────────────
-  </script>
+
+  <!-- Joystick mimo Phaser -->
+  <div id="joy">
+    <div id="joy-base"></div>
+    <div id="joy-stick"></div>
+  </div>
+
+  <!-- Phaser + main.js BEZ defer -->
   <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
+  <script src="main.js"></script>
+
   <script>
-    let selectedChar = 'm';
-    function selectChar(g) {
-      selectedChar = g;
-      document.getElementById('char-male').classList.toggle('selected', g === 'm');
-      document.getElementById('char-female').classList.toggle('selected', g === 'f');
+    const nick = document.getElementById('nick');
+    const inp = document.getElementById('n');
+    const go = document.getElementById('go');
+    const joy = document.getElementById('joy');
+
+    let blockKeys = true;
+    window.addEventListener('keydown', (e) => {
+      if (!blockKeys) return;
+      if (e.code === 'Space' || e.code === 'Enter') {
+        e.preventDefault(); e.stopPropagation();
+      }
+    }, true);
+
+    // Audio gesture
+(function(){
+  let fired = false;
+  const fire = () => {
+    if (fired) return;
+    fired = true;
+    window._rrUserGesture = true;
+    document.dispatchEvent(new Event('rr-user-gesture'));
+  };
+  ['pointerdown','touchstart','click','keydown']
+    .forEach(ev => document.addEventListener(ev, fire, {once:true, passive:true}));
+})();
+
+    function startGame() {
+      const v = inp.value.trim();
+      if (!v) { alert('Please enter your nickname'); return; }
+      localStorage.setItem('rr_nickname', v);
+      
+      nick.style.display = 'none';
+      blockKeys = false;
+
+      document.getElementById('bg-cover').src = 'assets/hero_screen_1280x720.png';
+
+      setTimeout(() => {
+        document.dispatchEvent(new Event('rr-user-gesture'));
+        if (window.startRescueRiders) {
+          window.startRescueRiders();
+        }
+      }, 800);
+
+      if ('ontouchstart' in window && window.innerWidth > window.innerHeight) {
+        joy.style.display = 'block';
+      }
     }
-    const form = document.getElementById('nickname-form');
-    const startBtn = document.getElementById('start-btn');
-    const input = document.getElementById('nickname');
-    const container = document.getElementById('game-container');
-    const loadingOverlay = document.getElementById('loading-overlay');
-    const loadingBar = document.getElementById('loading-bar');
-    const loadingText = document.getElementById('loading-text');
-    window.addEventListener('load', () => {
-      const saved = localStorage.getItem('rr_nickname');
-      if (saved) input.value = saved;
-      const savedGender = localStorage.getItem('rr_gender');
-      if (savedGender) selectChar(savedGender);
-    });
-    window.updateLoadingProgress = function(pct) {
-      loadingBar.style.width = pct + '%';
-      loadingText.textContent = 'Loading... ' + Math.round(pct) + '%';
-    };
-    function bootGame() {
-      form.style.display = 'none';
-      loadingOverlay.style.display = 'flex';
-      loadingBar.style.width = '0%';
-      loadingText.textContent = 'Loading... 0%';
-      container.style.display = 'block';
-      localStorage.setItem('rr_gender', selectedChar);
-      window.rr_selectedGender = selectedChar;
-      window.rr_assetsLoaded = false;
-      // Safety fallback: hide overlay after 12s max regardless
-      setTimeout(() => { loadingOverlay.style.display = 'none'; }, 12000);
-      const s = document.createElement('script');
-      s.src = 'main.js';
-      document.body.appendChild(s);
-    }
-    startBtn.addEventListener('click', () => {
-      const nick = input.value.trim();
-      if (!nick) { alert('Please enter your nickname.'); return; }
-      localStorage.setItem('rr_nickname', nick);
-      bootGame();
-    });
-    input.addEventListener('keydown', e => { if (e.key === 'Enter') startBtn.click(); });
+
+    go.addEventListener('click', startGame);
+    inp.addEventListener('keydown', e => { if (e.key === 'Enter') startGame(); });
+
+    // Joystick logic
+    (function(){
+      const knob = document.getElementById('joy-stick');
+      if (!joy || !knob) return;
+
+      let state = {L:false, R:false, U:false, D:false};
+      const TH = 0.20;
+
+      const send = (key, type) => {
+        const m = {ArrowLeft:37, ArrowUp:38, ArrowRight:39, ArrowDown:40};
+        window.dispatchEvent(new KeyboardEvent(type, {
+          key, code: key, keyCode: m[key], which: m[key], bubbles: true
+        }));
+      };
+
+      const center = () => {
+        const r = joy.getBoundingClientRect();
+        return {
+          x: r.left + r.width / 2,
+          y: r.top + r.height / 2,
+          rad: Math.min(r.width, r.height) * 0.48
+        };
+      };
+
+      const move = (x, y) => {
+        const c = center();
+        let dx = x - c.x, dy = y - c.y;
+        const L = Math.hypot(dx, dy) || 1, R = c.rad;
+        if (L > R) { dx = (dx / L) * R; dy = (dy / L) * R; }
+        knob.style.transform = `translate(${dx}px, ${dy}px)`;
+        const nx = dx / R, ny = dy / R;
+        const want = { L: nx < -TH, R: nx > TH, U: ny < -TH, D: ny > TH };
+        ['L','R','U','D'].forEach(dir => {
+          const key = {L:'ArrowLeft', R:'ArrowRight', U:'ArrowUp', D:'ArrowDown'}[dir];
+          if (want[dir] && !state[dir]) send(key, 'keydown');
+          if (!want[dir] && state[dir]) send(key, 'keyup');
+        });
+        state = want;
+      };
+
+      const release = () => {
+        knob.style.transform = 'translate(0,0)';
+        ['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].forEach(k => send(k, 'keyup'));
+        state = {L:false, R:false, U:false, D:false};
+      };
+
+      joy.addEventListener('touchstart', e => { e.preventDefault(); move(e.changedTouches[0].clientX, e.changedTouches[0].clientX); }, {passive: false});
+      joy.addEventListener('touchmove', e => { e.preventDefault(); move(e.changedTouches[0].clientX, e.changedTouches[0].clientY); }, {passive: false});
+      joy.addEventListener('touchend', release, {passive: false});
+      joy.addEventListener('touchcancel', release, {passive: false});
+    })();
   </script>
 </body>
 </html>
