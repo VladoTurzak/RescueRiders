@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Rescue Riders — Play Now</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+  <link rel="icon" type="image/x-icon" href="favicon.ico">
+  <style>
+    html, body { margin:0; padding:0; height:100%; overflow:hidden; background:#000; font-family:Arial,Helvetica,sans-serif; touch-action:none; -webkit-user-select:none; user-select:none; }
+    #game-container { width:100%; height:100%; display:none; position:relative; z-index:1; }
+    body { background:url('assets/hero_intro.png') center center / cover no-repeat; }
+    #nickname-form { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); background:rgba(0,0,0,0.78); color:#fff; padding:28px 36px; border-radius:14px; box-shadow:0 0 40px rgba(0,0,0,0.8); z-index:9999; text-align:center; min-width:290px; animation:fadein 0.9s ease; }
+    #nickname-form h2 { margin:0 0 6px; color:#ffcc00; letter-spacing:1px; }
+    #nickname-form input { width:80%; padding:10px; font-size:18px; border:none; border-radius:8px; text-align:center; }
+    #nickname-form button.start-btn { margin-top:14px; padding:10px 22px; font-size:18px; background:#ffcc00; color:#000; border:none; border-radius:8px; cursor:pointer; font-weight:bold; touch-action:manipulation; }
+    #nickname-form button.start-btn:hover { filter:brightness(1.08); }
+    .char-select { display:flex; justify-content:center; gap:16px; margin:12px 0 4px; }
+    .char-option { cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:5px; padding:8px 14px; border-radius:10px; border:2px solid transparent; transition:border 0.2s,background 0.2s; touch-action:manipulation; }
+    .char-option.selected { border:2px solid #ffcc00; background:rgba(255,204,0,0.18); }
+    .char-option img { width:52px; height:52px; object-fit:contain; image-rendering:pixelated; }
+    .char-option span { font-size:13px; color:#ccc; }
+    #loading-overlay { position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.92); z-index:99999; display:none; flex-direction:column; align-items:center; justify-content:center; }
+    #loading-overlay .load-logo { color:#ffcc00; font-size:26px; font-weight:bold; margin-bottom:18px; letter-spacing:1px; }
+    #loading-bar-wrap { width:260px; height:16px; background:#333; border-radius:10px; overflow:hidden; }
+    #loading-bar { height:100%; width:0%; background:linear-gradient(90deg,#ffcc00,#ff7700); border-radius:10px; transition:width 0.1s linear; }
+    #loading-text { margin-top:9px; color:#aaa; font-size:14px; }
+    @keyframes fadein { from{opacity:0; transform:translate(-50%,-44%);} to{opacity:1; transform:translate(-50%,-50%);} }
+  </style>
+  <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="mobile-web-app-capable" content="yes">
+
+</head>
+<body>
+  <div id="nickname-form">
+    <h2>🌊 Rescue Riders</h2>
+    <p>Enter your nickname:</p>
+    <input id="nickname" type="text" maxlength="12" placeholder="Your name" autofocus />
+    <p style="margin:14px 0 2px;color:#ffcc00;font-size:13px;font-weight:bold;">CHOOSE YOUR RIDER</p>
+    <div class="char-select">
+      <div class="char-option selected" id="char-male" onclick="selectChar('m')">
+        <img src="assets/jetski_m.png" alt="Male" />
+        <span>👦 Male</span>
+      </div>
+      <div class="char-option" id="char-female" onclick="selectChar('f')">
+        <img src="assets/jetski_f.png" alt="Female" />
+        <span>👧 Female</span>
+      </div>
+    </div>
+    <button class="start-btn" id="start-btn">🚀 Start Game</button>
+  </div>
+  <div id="loading-overlay">
+    <div class="load-logo">🌊 Rescue Riders</div>
+    <div id="loading-bar-wrap"><div id="loading-bar"></div></div>
+    <div id="loading-text">Loading... 0%</div>
+  </div>
+  <div id="game-container"></div>
+  <!-- Firebase SDK (compat v10) -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+  <script src="firebase-config.js"></script>
+  <script>
+    // ── Online Leaderboard helpers ──────────────────────────────
+    (function() {
+      const cfg = window.RR_FIREBASE_CONFIG;
+      const configured = cfg && cfg.apiKey && !cfg.apiKey.startsWith('PASTE');
+      if (!configured) {
+        console.warn('[RR] Firebase not configured – leaderboard will use localStorage only.');
+        window.rrSaveScore = async () => {};
+        window.rrGetLeaderboard = async () => [];
+        return;
+      }
+      try {
+        firebase.initializeApp(cfg);
+        const db = firebase.firestore();
+        window.rrSaveScore = async (name, score) => {
+          try {
+            await db.collection('leaderboard').add({
+              name: String(name).slice(0, 20),
+              score: Number(score),
+              date: new Date().toISOString()
+            });
+          } catch(e) { console.warn('[RR] Score save failed:', e); }
+        };
+        window.rrGetLeaderboard = async () => {
+          try {
+            const snap = await db.collection('leaderboard')
+              .orderBy('score', 'desc').limit(20).get();
+            return snap.docs.map(d => d.data());
+          } catch(e) { console.warn('[RR] Leaderboard fetch failed:', e); return []; }
+        };
+        console.log('[RR] Firebase online leaderboard ready ✅');
+      } catch(e) {
+        console.warn('[RR] Firebase init failed:', e);
+        window.rrSaveScore = async () => {};
+        window.rrGetLeaderboard = async () => [];
+      }
+    })();
+    // ────────────────────────────────────────────────────────────
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
+  <script>
+    let selectedChar = 'm';
+    function selectChar(g) {
+      selectedChar = g;
+      document.getElementById('char-male').classList.toggle('selected', g === 'm');
+      document.getElementById('char-female').classList.toggle('selected', g === 'f');
+    }
+    const form = document.getElementById('nickname-form');
+    const startBtn = document.getElementById('start-btn');
+    const input = document.getElementById('nickname');
+    const container = document.getElementById('game-container');
+    const loadingOverlay = document.getElementById('loading-overlay');
+    const loadingBar = document.getElementById('loading-bar');
+    const loadingText = document.getElementById('loading-text');
+    window.addEventListener('load', () => {
+      const saved = localStorage.getItem('rr_nickname');
+      if (saved) input.value = saved;
+      const savedGender = localStorage.getItem('rr_gender');
+      if (savedGender) selectChar(savedGender);
+    });
+    window.updateLoadingProgress = function(pct) {
+      loadingBar.style.width = pct + '%';
+      loadingText.textContent = 'Loading... ' + Math.round(pct) + '%';
+    };
+    function bootGame() {
+      form.style.display = 'none';
+      loadingOverlay.style.display = 'flex';
+      loadingBar.style.width = '0%';
+      loadingText.textContent = 'Loading... 0%';
+      container.style.display = 'block';
+      localStorage.setItem('rr_gender', selectedChar);
+      window.rr_selectedGender = selectedChar;
+      window.rr_assetsLoaded = false;
+      // Safety fallback: hide overlay after 12s max regardless
+      setTimeout(() => { loadingOverlay.style.display = 'none'; }, 12000);
+      const s = document.createElement('script');
+      s.src = 'main.js';
+      document.body.appendChild(s);
+    }
+    startBtn.addEventListener('click', () => {
+      const nick = input.value.trim();
+      if (!nick) { alert('Please enter your nickname.'); return; }
+      localStorage.setItem('rr_nickname', nick);
+      bootGame();
+    });
+    input.addEventListener('keydown', e => { if (e.key === 'Enter') startBtn.click(); });
+  </script>
+</body>
+</html>
